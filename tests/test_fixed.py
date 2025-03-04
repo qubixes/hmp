@@ -18,6 +18,7 @@ real_data = os.path.join("tutorials", "sample_data", "eeg", "processed_0022_epo.
 real_metadata = os.path.join("tutorials", "sample_data", "eeg", "0022.csv")
 
 def create_data(sfreq, n_events):
+    os.makedirs('tests/gen_data')
     # Testing isolated functions in simulations
     assert simulations.simulation_sfreq() == 600.614990234375    
     epoch_data, sim_source_times, info = simulations.demo(1, 1)

@@ -32,13 +32,13 @@ def create_data(sfreq, n_events):
     for cur_name in names:
         sources.append([cur_name, 10., 3.1e-8, gamma(2, scale=1)])
     raw_a, event_a,_ = simulations.simulate(sources, n_trials, cpus, 'dataset_a_raw', overwrite=True,
-                                          sfreq=sfreq, times=times_a, noise=True, seed=1, save_snr=True)
+                                          sfreq=sfreq, times=times_a, noise=True, seed=1, save_snr=True, path='tests/gen_data')
     means = np.array([50, 100, 100, 50])/2
     sources = []
     for cur_name, cur_mean in zip(names, means):
         sources.append([cur_name, 10., 1, gamma(2, scale=cur_mean)])
     raw_b, event_b = simulations.simulate(sources, n_trials, cpus, 'dataset_b_raw', seed=1, overwrite=True, 
-        sfreq=sfreq, verbose=True, proportions=[.99,1,1,1], noise=False)
+        sfreq=sfreq, verbose=True, proportions=[.99,1,1,1], noise=False, path='tests/gen_data')
     
     events = []
     raws = []

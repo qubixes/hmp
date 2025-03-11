@@ -23,8 +23,8 @@ def test_fixed():
     
     for root, dirs, files in os.walk('tests/gen_data/'):
         if 'dataset' in root:
-            events.append(np.load(files[0]))
-            raws.append(files[1])
+            events.append(np.load([x for x in files if 'events.npy' in x][0]))
+            raws.append([x for x in files if 'raw.fif' in x][0])
             
     event_a = events[0]
     # Data reading

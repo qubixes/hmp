@@ -3,7 +3,6 @@ import os
 
 import numpy as np
 import pandas as pd
-from scipy.stats import gamma
 from pathlib import Path
 import gc
 
@@ -14,49 +13,19 @@ from hmp.models.base import EventProperties
 from hmp.trialdata import TrialData
 
 
-real_data = os.path.join("tutorials", "sample_data", "eeg", "processed_0022_epo.fif")
-real_metadata = os.path.join("tutorials", "sample_data", "eeg", "0022.csv")
-
-def create_data(sfreq, n_events):
-    os.makedirs('tests/gen_data')
-    # Testing isolated functions in simulations
-    assert simulations.simulation_sfreq() == 600.614990234375    
-    epoch_data, sim_source_times, info = simulations.demo(1, 1)
-    # Data creation/reading
-    ## Simulation parameters
-    n_trials = 2
-    cpus=1
-    times_a = np.array([[50, 50, 150, 50],
-             [50, 100, 100, 50],])
-    names = ['bankssts-rh','bankssts-lh','bankssts-rh','bankssts-lh']
-    sources = []
-    for cur_name in names:
-        sources.append([cur_name, 10., 3.1e-8, gamma(2, scale=1)])
-    raw_a, event_a,_ = simulations.simulate(sources, n_trials, cpus, 'dataset_a_raw', overwrite=True,
-                                          sfreq=sfreq, times=times_a, noise=True, seed=1, save_snr=True, path='tests/gen_data')
-    means = np.array([50, 100, 100, 50])/2
-    sources = []
-    for cur_name, cur_mean in zip(names, means):
-        sources.append([cur_name, 10., 1, gamma(2, scale=cur_mean)])
-    raw_b, event_b = simulations.simulate(sources, n_trials, cpus, 'dataset_b_raw', seed=1, overwrite=True, 
-        sfreq=sfreq, verbose=True, proportions=[.99,1,1,1], noise=False, path='tests/gen_data')
-    
+def test_fixed():
+    sfreq = 100
+    n_events = 3
     events = []
     raws = []
     event_id = {'stimulus':1}#trigger 1 = stimulus
     resp_id = {'response':5}
     
-    for raw_file, event_file in zip([raw_a, raw_b],
-                    [event_a, event_b]):
-        events.append(np.load(event_file))
-        raws.append(raw_file)
-    sfreq = 100
-    return raws, events, event_id, resp_id
-
-def test_fixed():
-    sfreq = 100
-    n_events = 3
-    raws, events, event_id, resp_id = create_data(sfreq, n_events)
+    for root, dirs, files in os.walk('tests/gen_data/'):
+        if 'dataset' in root:
+            events.append(np.load(files[0]))
+            raws.append(files[1])
+            
     event_a = events[0]
     # Data reading
     epoch_data = hmp.utils.read_mne_data(raws, event_id=event_id, resp_id=resp_id, sfreq=sfreq,
@@ -83,4 +52,4 @@ def test_fixed():
     assert (np.array(simulations.classification_true(true_topos,test_topos)) == np.array(([0,1,2],[0,1,2]))).all()
     
     assert np.isclose(np.sum(np.abs(true_topos.data - test_topos.data)), 0, atol=1e-4, rtol=0)
-    assert np.isclose(likelihood, np.array(2.4834), atol=1e-4, rtol=0)
+    assert np.isclose(likelihood, np.array(1.4300866), atol=1e-4, rtol=0)

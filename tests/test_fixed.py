@@ -17,15 +17,14 @@ def test_fixed():
     sfreq = 100
     n_events = 3
     events = []
-    raws = []
     event_id = {'stimulus':1}#trigger 1 = stimulus
     resp_id = {'response':5}
-    
-    for root, dirs, files in os.walk('tests/gen_data/'):
-        if 'dataset' in root:
-            events.append(np.load([x for x in files if 'events.npy' in x][0]))
-            raws.append([x for x in files if 'raw.fif' in x][0])
-            
+
+    raws = ['dataset_a_raw_raw.fif','dataset_b_raw_raw.fif']
+    event_files = ['dataset_a_raw_raw_generating_events.npy', 'dataset_b_raw_raw_generating_events.npy']
+    for file in event_files:
+        events.append(np.load(file))
+
     event_a = events[0]
     # Data reading
     epoch_data = hmp.utils.read_mne_data(raws, event_id=event_id, resp_id=resp_id, sfreq=sfreq,

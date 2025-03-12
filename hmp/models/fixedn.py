@@ -313,7 +313,6 @@ class FixedEventModel(BaseModel):
                 self.magnitudes[i_sp][level_id],
                 self.parameters[i_sp][level_id],
                 np.zeros((self.n_events+1)).astype(int),
-                lkh_only=False
             )
             part = trial_data.coords["participant"].values
             trial = trial_data.coords["trials"].values
@@ -683,7 +682,6 @@ class FixedEventModel(BaseModel):
         locations,
         n_events=None,
         subset_epochs=None,
-        lkh_only=False,
         by_trial_lkh=False,
     ):
         """Estimate probabilities.
@@ -710,8 +708,6 @@ class FixedEventModel(BaseModel):
             how many events are estimated
         subset_epochs : list
             boolean array indicating which epoch should be taken into account for level-based calcs
-        lkh_only: bool
-            Returning eventprobs (True) or not (False)
 
         Returns
         -------
@@ -830,16 +826,14 @@ class FixedEventModel(BaseModel):
             )  # sum over max_samples to avoid 0s in log
             eventprobs = eventprobs / eventprobs.sum(axis=0)
 
-        if lkh_only:
-            return likelihood
-        elif by_trial_lkh:
+        if by_trial_lkh:
             return forward * backward
         else:
             return [likelihood, eventprobs]
 
     def _estim_probs_levels(
         self, trial_data, magnitudes, parameters, locations, mags_map, pars_map, levels,
-        lkh_only=False, cpus=1
+        cpus=1
     ):
         """Estimate probability levels.
 
@@ -863,9 +857,7 @@ class FixedEventModel(BaseModel):
             2D n_level * n_events array indication locations for all events
         n_events : int
             how many events are estimated
-        lkh_only: bool
-            Returning eventprobs (True) or not (False)
-
+            
         Returns
         -------
         loglikelihood : float
@@ -912,10 +904,7 @@ class FixedEventModel(BaseModel):
                 likes_events_level[c][1]
             )
 
-        if lkh_only:
-            return likelihood
-        else:
-            return [likelihood, eventprobs]
+        return [likelihood, eventprobs]
 
     def distribution_pmf(self, shape, scale, max_duration):
         """Return PMF for a provided scipy disttribution.

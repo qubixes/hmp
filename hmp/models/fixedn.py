@@ -52,7 +52,6 @@ class FixedEventModel(BaseModel):
         parameters=None,
         parameters_to_fix=None,
         magnitudes_to_fix=None,
-        # return_max=True,
         verbose=True,
         cpus=1,
         mags_map=None,
@@ -73,7 +72,7 @@ class FixedEventModel(BaseModel):
             When providing a list, magnitudes need to be in the same order
             _n_th magnitudes parameter is  used for the _n_th event
         parameters : list
-            list of initial conditions for Gamma distribution parameters parameter
+            list of initial conditions for Gamma distribution parameters
             (2D stage * parameter or 3D iteration * n_events * n_components).
             If parameters are estimated, the list provided is used as starting point,
             if parameters are fixed, parameters estimated will be the same as the one provided.
@@ -286,15 +285,15 @@ class FixedEventModel(BaseModel):
             resetwarnings()
 
         self.lkhs = np.array([x[0] for x in estimates])
-        self.mags = np.array([x[1] for x in estimates])
-        self.pars = np.array([x[2] for x in estimates])
+        self.magnitudes = np.array([x[1] for x in estimates])
+        self.parameters = np.array([x[2] for x in estimates])
         self.traces = np.array([x[3] for x in estimates])
         self.param_dev = np.array([x[4] for x in estimates])
         if self.starting_points > 1 and self.return_max:
             max_lkhs = np.argmax(self.lkhs)
             self.lkhs = self.lkhs[[max_lkhs]]
-            self.mags = self.mags[[max_lkhs]]
-            self.pars = self.pars[[max_lkhs]]
+            self.magnitudes = self.magnitudes[[max_lkhs]]
+            self.parameters = self.parameters[[max_lkhs]]
             self.traces = self.traces[[max_lkhs]]
             self.param_dev = self.param_dev[[max_lkhs]]
 
@@ -308,11 +307,11 @@ class FixedEventModel(BaseModel):
     def transform(self, trial_data, level_id=0):
         all_event_probs = []
         all_likelihoods = []
-        for i_sp in range(self.mags.shape[0]):
+        for i_sp in range(self.magnitudes.shape[0]):
             likelihood, eventprobs = self.estim_probs(
                 trial_data,
-                self.mags[i_sp][level_id],
-                self.pars[i_sp][level_id],
+                self.magnitudes[i_sp][level_id],
+                self.parameters[i_sp][level_id],
                 np.zeros((self.n_events+1)).astype(int),
                 lkh_only=False
             )
@@ -399,12 +398,12 @@ class FixedEventModel(BaseModel):
     def xrparams(self):
         self._check_fitted("get xrparams")
         return xr.DataArray(
-                self.pars,
+                self.parameters,
                 dims=("starting_point", "level", "stage", "parameter"),
                 name="parameters",
                 coords={
-                    "starting_point": range(self.pars.shape[0]),
-                    "level": range(self.pars.shape[1]),
+                    "starting_point": range(self.parameters.shape[0]),
+                    "level": range(self.parameters.shape[1]),
                     "stage": range(self.n_events + 1),
                     "parameter": ["shape", "scale"],
                 },
@@ -413,12 +412,12 @@ class FixedEventModel(BaseModel):
     def xrmags(self, trial_data):
         self._check_fitted("get xrmags")
         return xr.DataArray(
-                self.mags,
+                self.magnitudes,
                 dims=("starting_points", "level", "event", "component"),
                 name="magnitudes",
                 coords={
-                    "starting_points": range(self.mags.shape[0]),
-                    "level": range(self.mags.shape[1]),
+                    "starting_points": range(self.magnitudes.shape[0]),
+                    "level": range(self.magnitudes.shape[1]),
                     "event": range(self.n_events),
                     "component": range(trial_data.n_dims),
                 },

@@ -29,4 +29,5 @@ def create_data():
     raw_b, event_b = simulations.simulate(sources, n_trials, cpus, 'dataset_b_raw', seed=1, overwrite=True, 
         sfreq=sfreq, verbose=True, proportions=[.99,1,1,1], noise=False, path='dataset_b/')
 
-create_data()
+if __name__ == "__main__":
+    create_data()

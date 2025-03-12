@@ -43,15 +43,14 @@ def test_fixed():
     data_a = hmp.utils.participant_selection(hmp_data, 'a')
     event_properties = EventProperties.create_expected(sfreq=data_a.sfreq)
     trial_data = TrialData.from_standard_data(data=data_a, template=event_properties.template)
-    model = FixedEventModel(event_properties, n_events=n_events, maximization=False)
+    model = FixedEventModel(event_properties, n_events=n_events)
     sim_source_times, true_pars, true_magnitudes, _ = \
         simulations.simulated_times_and_parameters(event_a, model, trial_data)
 
-    true_loglikelihood, true_estimates = model.fit_transform(
-        trial_data, parameters = np.array([true_pars]), magnitudes=np.array([true_magnitudes]),
-        verbose=True)
+    true_loglikelihood, true_estimates = model.transform(
+        trial_data, parameters = np.array([true_pars]), magnitudes=np.array([true_magnitudes]))
     true_topos = hmp.utils.event_topo(epoch_data, true_estimates.squeeze(), mean=True)
-    init_sim = FixedEventModel(event_properties, n_events=n_events, maximization=True,)
+    init_sim = FixedEventModel(event_properties, n_events=n_events)
     likelihood, estimates = init_sim.fit_transform(trial_data, verbose=True)
     test_topos = hmp.utils.event_topo(epoch_data, estimates.squeeze(), mean=True)
     assert (np.array(simulations.classification_true(true_topos,test_topos)) == np.array(([0,1,2],[0,1,2]))).all()

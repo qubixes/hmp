@@ -28,7 +28,6 @@ class FixedEventModel(BaseModel):
         self, *args, n_events=None, parameters_to_fix=None, magnitudes_to_fix=None,
         tolerance=1e-4,
         max_iteration=1e3,
-        maximization=True,
         min_iteration=1,
         starting_points=1,
         return_max=True,
@@ -39,7 +38,6 @@ class FixedEventModel(BaseModel):
         self.magnitudes_to_fix = magnitudes_to_fix
         self.tolerance = tolerance
         self.max_iteration = max_iteration
-        self.maximization = maximization
         self.min_iteration = min_iteration
         self.starting_points = starting_points
         self.return_max = return_max
@@ -90,8 +88,6 @@ class FixedEventModel(BaseModel):
             Tolerance applied to the expectation maximization in the EM() function
         max_iteration: int
             Maximum number of iteration for the expectation maximization in the EM() function
-        maximization: bool
-            If True (Default) perform the maximization phase in EM() otherwhise skip
         min_iteration: int
             Minimum number of iteration for the expectation maximization in the EM() function
         starting_points: int
@@ -122,7 +118,6 @@ class FixedEventModel(BaseModel):
         infos_to_store["sfreq"] = self.sfreq
         infos_to_store["event_width_samples"] = self.event_width_samples
         infos_to_store["tolerance"] = self.tolerance
-        infos_to_store["maximization"] = int(self.maximization)
 
         if self.n_events is None:
             if parameters is not None:
@@ -253,7 +248,6 @@ class FixedEventModel(BaseModel):
                 trial_data,
                 magnitudes,
                 parameters,
-                itertools.repeat(self.maximization),
                 itertools.repeat(magnitudes_to_fix),
                 itertools.repeat(parameters_to_fix),
                 itertools.repeat(self.max_iteration),
@@ -278,7 +272,6 @@ class FixedEventModel(BaseModel):
                         trial_data,
                         mags,
                         pars,
-                        self.maximization,
                         magnitudes_to_fix,
                         parameters_to_fix,
                         self.max_iteration,
@@ -442,7 +435,6 @@ class FixedEventModel(BaseModel):
         trial_data,
         magnitudes,
         parameters,
-        maximization=True,
         magnitudes_to_fix=None,
         parameters_to_fix=None,
         max_iteration=1e3,
@@ -473,8 +465,6 @@ class FixedEventModel(BaseModel):
             if parameters are fixed, parameters estimated will be the same as the one provided.
             When providing a list, stage need to be in the same order
             _n_th gamma parameter is  used for the _n_th stage
-        maximization: bool
-            If True (Default) perform the maximization phase in EM() otherwhise skip
         magnitudes_to_fix: bool
             To fix (True) or to estimate (False, default) the magnitudes of the channel contribution
             to the events
@@ -520,64 +510,62 @@ class FixedEventModel(BaseModel):
         traces = [lkh]
         param_dev = [parameters.copy()]  # ... and parameters
         i = 0
-        if not maximization:
-            lkh_prev = lkh
-        else:
-            lkh_prev = lkh
+
+        lkh_prev = lkh
+        parameters_prev = parameters.copy()
+
+        while i < max_iteration:  # Expectation-Maximization algorithm
+            if i >= min_iteration and (
+                np.isneginf(lkh) or tolerance > (lkh - lkh_prev) / np.abs(lkh_prev)
+            ):
+                break
+
+            # As long as new run gives better likelihood, go on
+            lkh_prev = lkh.copy()
             parameters_prev = parameters.copy()
 
-            while i < max_iteration:  # Expectation-Maximization algorithm
-                if i >= min_iteration and (
-                    np.isneginf(lkh) or tolerance > (lkh - lkh_prev) / np.abs(lkh_prev)
-                ):
-                    break
+            for c in range(n_levels):  # get params/mags
+                mags_map_level = np.where(mags_map[c, :] >= 0)[0]
+                pars_map_level = np.where(pars_map[c, :] >= 0)[0]
+                epochs_level = np.where(levels == c)[0]
 
-                # As long as new run gives better likelihood, go on
-                lkh_prev = lkh.copy()
-                parameters_prev = parameters.copy()
-
-                for c in range(n_levels):  # get params/mags
-                    mags_map_level = np.where(mags_map[c, :] >= 0)[0]
-                    pars_map_level = np.where(pars_map[c, :] >= 0)[0]
-                    epochs_level = np.where(levels == c)[0]
-
-                    # get mags/pars by level
-                    magnitudes[c, mags_map_level, :], parameters[c, pars_map_level, :] = (
-                        self.get_magnitudes_parameters_expectation(
-                            trial_data,
-                            eventprobs[np.ix_(range(trial_data.max_duration), epochs_level, mags_map_level)],
-                            subset_epochs=epochs_level,
-                        )
+                # get mags/pars by level
+                magnitudes[c, mags_map_level, :], parameters[c, pars_map_level, :] = (
+                    self.get_magnitudes_parameters_expectation(
+                        trial_data,
+                        eventprobs[np.ix_(range(trial_data.max_duration), epochs_level, mags_map_level)],
+                        subset_epochs=epochs_level,
                     )
-
-                    magnitudes[c, magnitudes_to_fix, :] = initial_magnitudes[
-                        c, magnitudes_to_fix, :
-                    ].copy()
-                    parameters[c, parameters_to_fix, :] = initial_parameters[
-                        c, parameters_to_fix, :
-                    ].copy()
-
-                # set mags to mean if requested in map
-                for m in range(n_events):
-                    for m_set in np.unique(mags_map[:, m]):
-                        if m_set >= 0:
-                            magnitudes[mags_map[:, m] == m_set, m, :] = np.mean(
-                                magnitudes[mags_map[:, m] == m_set, m, :], axis=0
-                            )
-
-                # set param to mean if requested in map
-                for p in range(n_events + 1):
-                    for p_set in np.unique(pars_map[:, p]):
-                        if p_set >= 0:
-                            parameters[pars_map[:, p] == p_set, p, :] = np.mean(
-                                parameters[pars_map[:, p] == p_set, p, :], axis=0
-                            )
-                lkh, eventprobs = self._estim_probs_levels(
-                    trial_data, magnitudes, parameters, locations, mags_map, pars_map, levels, cpus=cpus
                 )
-                traces.append(lkh)
-                param_dev.append(parameters.copy())
-                i += 1
+
+                magnitudes[c, magnitudes_to_fix, :] = initial_magnitudes[
+                    c, magnitudes_to_fix, :
+                ].copy()
+                parameters[c, parameters_to_fix, :] = initial_parameters[
+                    c, parameters_to_fix, :
+                ].copy()
+
+            # set mags to mean if requested in map
+            for m in range(n_events):
+                for m_set in np.unique(mags_map[:, m]):
+                    if m_set >= 0:
+                        magnitudes[mags_map[:, m] == m_set, m, :] = np.mean(
+                            magnitudes[mags_map[:, m] == m_set, m, :], axis=0
+                        )
+
+            # set param to mean if requested in map
+            for p in range(n_events + 1):
+                for p_set in np.unique(pars_map[:, p]):
+                    if p_set >= 0:
+                        parameters[pars_map[:, p] == p_set, p, :] = np.mean(
+                            parameters[pars_map[:, p] == p_set, p, :], axis=0
+                        )
+            lkh, eventprobs = self._estim_probs_levels(
+                trial_data, magnitudes, parameters, locations, mags_map, pars_map, levels, cpus=cpus
+            )
+            traces.append(lkh)
+            param_dev.append(parameters.copy())
+            i += 1
 
         if i == max_iteration:
             warn(

@@ -31,6 +31,7 @@ class FixedEventModel(BaseModel):
         min_iteration=1,
         starting_points=1,
         return_max=True,
+        max_scale=None,
         **kwargs
     ):
         self.n_events = n_events
@@ -42,6 +43,7 @@ class FixedEventModel(BaseModel):
         self.starting_points = starting_points
         self.return_max = return_max
         self._fitted = False
+        self.max_scale = max_scale
 
         super().__init__(*args, **kwargs)
 
@@ -109,6 +111,8 @@ class FixedEventModel(BaseModel):
             [{'cue': ['SP', 'AC',]}, {'resp': ['left', 'right']}]. These are crossed by repeating
             the first level as many times as there are levels in the selevel level. E.g., SP-left,
             SP-right, AC-left, AC-right.
+        max_scale: int
+            expected maximum mean distance between events, only used when generating random starting points
         """
         # self.trial_data = trial_data
 
@@ -132,6 +136,12 @@ class FixedEventModel(BaseModel):
             f"{self.n_events} events do not fit given the minimum duration of {min(trial_data.durations)}"
             " and a location of {self.location}"
         )
+
+        if self.starting_points > 1 and self.max_scale is None:
+            raise ValueError(
+                    "If using multiple starting points, a maximum distance between events needs "
+                    " to be provided using the max_scale argument"
+                )
 
         if level_dict is None:
             (
@@ -637,14 +647,15 @@ class FixedEventModel(BaseModel):
         random_stages : ndarray
             random partition between 0 and mean_d
         """
-        mean_d = int(self.mean_d)
         rnd_durations = np.zeros(n_events + 1)
+        assert self.event_width_samples*(n_events + 1) < self.max_scale, \
+            f"Max_scale too short, need to be more than {self.event_width_samples*(n_events+1)}"
         while any(rnd_durations < self.event_width_samples):  # at least event_width
             rnd_events = np.random.default_rng().integers(
-                low=0, high=mean_d, size=n_events
+                low=0, high=self.max_scale, size=n_events
             )  # n_events between 0 and mean_d
             rnd_events = np.sort(rnd_events)
-            rnd_durations = np.hstack((rnd_events, mean_d)) - np.hstack(
+            rnd_durations = np.hstack((rnd_events, self.max_scale)) - np.hstack(
                 (0, rnd_events)
             )  # associated durations
         random_stages = np.array(

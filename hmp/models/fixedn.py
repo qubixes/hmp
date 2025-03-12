@@ -304,15 +304,23 @@ class FixedEventModel(BaseModel):
 
         self._fitted = True
 
-    def transform(self, trial_data, level_id=0):
+    def transform(self, trial_data, magnitudes=None, parameters=None, level_id=0):
+        if parameters is None:
+            parameters = self.parameters
+        if magnitudes is None:
+            magnitudes = self.magnitudes
+        if len(parameters.shape) == 3:
+            parameters = np.array([parameters])
+        if len(magnitudes.shape) == 3:
+            magnitudes = np.array([magnitudes])
         all_event_probs = []
         all_likelihoods = []
-        for i_sp in range(self.magnitudes.shape[0]):
+        for i_sp in range(magnitudes.shape[0]):
             likelihood, eventprobs = self.estim_probs(
                 trial_data,
-                self.magnitudes[i_sp][level_id],
-                self.parameters[i_sp][level_id],
-                np.zeros((self.n_events+1)).astype(int),
+                magnitudes[i_sp][level_id],
+                parameters[i_sp][level_id],
+                np.zeros((self.n_events+1)).astype(int)
             )
             part = trial_data.coords["participant"].values
             trial = trial_data.coords["trials"].values

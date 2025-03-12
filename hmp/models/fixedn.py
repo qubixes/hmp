@@ -30,7 +30,6 @@ class FixedEventModel(BaseModel):
         max_iteration=1e3,
         min_iteration=1,
         starting_points=1,
-        return_max=True,
         max_scale=None,
         **kwargs
     ):
@@ -41,7 +40,6 @@ class FixedEventModel(BaseModel):
         self.max_iteration = max_iteration
         self.min_iteration = min_iteration
         self.starting_points = starting_points
-        self.return_max = return_max
         self._fitted = False
         self.max_scale = max_scale
 
@@ -93,9 +91,6 @@ class FixedEventModel(BaseModel):
             Minimum number of iteration for the expectation maximization in the EM() function
         starting_points: int
             How many starting points to use for the EM() function
-        return_max: bool
-            In the case of multiple starting points, dictates whether to only return
-            the max loglikelihood model (True, default) or all of the models (False)
         verbose: bool
             True displays output useful for debugging, recommended for first use
         cpus: int
@@ -295,17 +290,15 @@ class FixedEventModel(BaseModel):
             resetwarnings()
 
         self.lkhs = np.array([x[0] for x in estimates])
-        self.magnitudes = np.array([x[1] for x in estimates])
-        self.parameters = np.array([x[2] for x in estimates])
-        self.traces = np.array([x[3] for x in estimates])
-        self.param_dev = np.array([x[4] for x in estimates])
-        if self.starting_points > 1 and self.return_max:
+        if self.starting_points > 1 :
             max_lkhs = np.argmax(self.lkhs)
-            self.lkhs = self.lkhs[[max_lkhs]]
-            self.magnitudes = self.magnitudes[[max_lkhs]]
-            self.parameters = self.parameters[[max_lkhs]]
-            self.traces = self.traces[[max_lkhs]]
-            self.param_dev = self.param_dev[[max_lkhs]]
+        else:
+            max_lkhs = 0
+        self.lkhs = self.lkhs[max_lkhs]
+        self.magnitudes =  np.array([x[1] for x in estimates])[max_lkhs]
+        self.parameters = np.array([x[2] for x in estimates])[max_lkhs]
+        self.traces = np.array([x[3] for x in estimates])[max_lkhs]
+        self.param_dev = np.array([x[4] for x in estimates])[max_lkhs]
 
         self.levels = levels
         self.n_levels = n_levels
@@ -319,42 +312,36 @@ class FixedEventModel(BaseModel):
             parameters = self.parameters
         if magnitudes is None:
             magnitudes = self.magnitudes
-        if len(parameters.shape) == 3:
+        if len(parameters.shape) == 2:
             parameters = np.array([parameters])
-        if len(magnitudes.shape) == 3:
+        if len(magnitudes.shape) == 2:
             magnitudes = np.array([magnitudes])
-        all_event_probs = []
-        all_likelihoods = []
-        for i_sp in range(magnitudes.shape[0]):
-            likelihood, eventprobs = self.estim_probs(
-                trial_data,
-                magnitudes[i_sp][level_id],
-                parameters[i_sp][level_id],
-                np.zeros((self.n_events+1)).astype(int)
-            )
-            part = trial_data.coords["participant"].values
-            trial = trial_data.coords["trials"].values
-            trial_x_part = xr.Coordinates.from_pandas_multiindex(
-                MultiIndex.from_arrays([part, trial], names=("participant", "trials")),
-                "trial_x_participant",
-            )
-            xreventprobs = xr.Dataset(
-                {"eventprobs": (("event", "trial_x_participant", "samples"), eventprobs.T)},
-                {
-                    "event": ("event", range(self.n_events)),
-                    "samples": ("samples", range(np.shape(eventprobs)[0])),
-                },
-            )
-            xreventprobs = xreventprobs.assign_coords(trial_x_part)
-            # if self.n_levels > 1:
-                # xreventprobs = xreventprobs.assign_coords(levels=("trial_x_participant", self.levels))
-            xreventprobs = xreventprobs.transpose("trial_x_participant", "samples", "event")
-            all_event_probs.append(xreventprobs)
-            all_likelihoods.append(likelihood)
+        likelihood, eventprobs = self.estim_probs(
+            trial_data,
+            magnitudes[level_id],
+            parameters[level_id],
+            np.zeros((self.n_events+1)).astype(int)
+        )
+        part = trial_data.coords["participant"].values
+        trial = trial_data.coords["trials"].values
+        trial_x_part = xr.Coordinates.from_pandas_multiindex(
+            MultiIndex.from_arrays([part, trial], names=("participant", "trials")),
+            "trial_x_participant",
+        )
+        xreventprobs = xr.Dataset(
+            {"eventprobs": (("event", "trial_x_participant", "samples"), eventprobs.T)},
+            {
+                "event": ("event", range(self.n_events)),
+                "samples": ("samples", range(np.shape(eventprobs)[0])),
+            },
+        )
+        xreventprobs = xreventprobs.assign_coords(trial_x_part)
+        # if self.n_levels > 1:
+            # xreventprobs = xreventprobs.assign_coords(levels=("trial_x_participant", self.levels))
+        xreventprobs = xreventprobs.transpose("trial_x_participant", "samples", "event")
 
-        all_xreventprobs = xr.concat(all_event_probs, dim="starting_points")
-        all_xreventprobs.coords["starting_points"] = np.arange(len(all_event_probs))
-        return np.array(all_likelihoods), all_xreventprobs
+
+        return likelihood, xreventprobs
         # Adding infos
         # estimated = estimated.assign_coords(rts=("trial_x_participant", self.named_durations.data))
 
@@ -382,30 +369,27 @@ class FixedEventModel(BaseModel):
         self._check_fitted("get traces")
         return xr.DataArray(
             self.traces,
-            dims=("starting_points", "em_iteration"),
+            dims=("em_iteration"),
             name="traces",
             coords={
-                "starting_points": range(self.traces.shape[0]),
                 "em_iteration": range(len(self.traces.shape[1]))}
         )
 
     @property
     def xrlikelihoods(self):
         self._check_fitted("get likelihoods")
-        return xr.DataArray(self.lkhs, name="loglikelihood", dims=("starting_points",),
-                            coords={"starting_points": range(self.lkhs.shape[0])})
+        return xr.DataArray(self.lkhs, name="loglikelihood")
 
     @property
     def xrparam_dev(self):
         self._check_fitted("get dev params")
         return xr.DataArray(
                 self.param_dev,
-                dims=("starting_points", "em_iteration", "level", "stage", "parameter"),
+                dims=( "em_iteration", "level", "stage", "parameter"),
                 name="param_dev",
                 coords=[
                     range(len(self.param_dev.shape[0])),
-                    range(len(self.param_deve.shape[1])),
-                    range(len(self.param_deve.shape[2])),
+                    range(len(self.param_dev.shape[1])),
                     range(self.n_events + 1),
                     ["shape", "scale"],
                 ],
@@ -416,11 +400,10 @@ class FixedEventModel(BaseModel):
         self._check_fitted("get xrparams")
         return xr.DataArray(
                 self.parameters,
-                dims=("starting_point", "level", "stage", "parameter"),
+                dims=("level", "stage", "parameter"),
                 name="parameters",
                 coords={
-                    "starting_point": range(self.parameters.shape[0]),
-                    "level": range(self.parameters.shape[1]),
+                    "level": range(self.parameters.shape[0]),
                     "stage": range(self.n_events + 1),
                     "parameter": ["shape", "scale"],
                 },
@@ -430,11 +413,10 @@ class FixedEventModel(BaseModel):
         self._check_fitted("get xrmags")
         return xr.DataArray(
                 self.magnitudes,
-                dims=("starting_points", "level", "event", "component"),
+                dims=( "level", "event", "component"),
                 name="magnitudes",
                 coords={
-                    "starting_points": range(self.magnitudes.shape[0]),
-                    "level": range(self.magnitudes.shape[1]),
+                    "level": range(self.magnitudes.shape[0]),
                     "event": range(self.n_events),
                     "component": range(trial_data.n_dims),
                 },

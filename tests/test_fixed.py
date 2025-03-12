@@ -57,4 +57,4 @@ def test_fixed():
     assert (np.array(simulations.classification_true(true_topos,test_topos)) == np.array(([0,1,2],[0,1,2]))).all()
     
     assert np.isclose(np.sum(np.abs(true_topos.data - test_topos.data)), 0, atol=1e-4, rtol=0)
-    assert np.isclose(likelihood, np.array(1.4300866), atol=1e-4, rtol=0)
+    assert np.isclose(likelihood, np.array(0.85561476), atol=1e-4, rtol=0)

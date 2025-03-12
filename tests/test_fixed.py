@@ -50,7 +50,7 @@ def test_fixed():
     true_loglikelihood, true_estimates = model.transform(
         trial_data, parameters = np.array([true_pars]), magnitudes=np.array([true_magnitudes]))
     true_topos = hmp.utils.event_topo(epoch_data, true_estimates.squeeze(), mean=True)
-    likelihood, estimates = init_sim.fit_transform(trial_data, verbose=True)
+    likelihood, estimates = model.fit_transform(trial_data, verbose=True)
     test_topos = hmp.utils.event_topo(epoch_data, estimates.squeeze(), mean=True)
     assert (np.array(simulations.classification_true(true_topos,test_topos)) == np.array(([0,1,2],[0,1,2]))).all()
     

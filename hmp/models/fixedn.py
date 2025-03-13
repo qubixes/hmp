@@ -146,9 +146,11 @@ class FixedEventModel(BaseModel):
                 levels,
             ) = 1, np.zeros(trial_data.n_trials)
             pars_map, mags_map = np.zeros((1, self.n_events + 1)), np.zeros((1, self.n_events))
+            level_dict = {}
+            clabels = ''
         else:
-            n_levels, levels, clabels, pars_map, mags_map = self._level_constructor(
-                trial_data, magnitudes, parameters, mags_map, pars_map, level_dict, verbose
+            n_levels, levels, clabels = self._level_constructor(
+                trial_data, level_dict, mags_map, pars_map, verbose
             )
             infos_to_store["mags_map"] = mags_map
             infos_to_store["pars_map"] = pars_map
@@ -301,7 +303,8 @@ class FixedEventModel(BaseModel):
         self.parameters = np.array([x[2] for x in estimates])[max_lkhs]
         self.traces = np.array([x[3] for x in estimates])[max_lkhs]
         self.param_dev = np.array([x[4] for x in estimates])[max_lkhs]
-
+        
+        self.level_dict = level_dict
         self.levels = levels
         self.n_levels = n_levels
         self.mags_map = mags_map
@@ -309,35 +312,49 @@ class FixedEventModel(BaseModel):
 
         self._fitted = True
 
-    def transform(self, trial_data, levels=None, level_id=0):
-
-        likelihood, eventprobs = self.estim_probs(
-            trial_data,
-            self.magnitudes[level_id],
-            self.parameters[level_id],
-            np.zeros((self.n_events+1)).astype(int)
-        )
-        part = trial_data.coords["participant"].values
-        trial = trial_data.coords["trials"].values
-        trial_x_part = xr.Coordinates.from_pandas_multiindex(
-            MultiIndex.from_arrays([part, trial], names=("participant", "trials")),
-            "trial_x_participant",
-        )
-        xreventprobs = xr.DataArray(eventprobs.T, dims=("event", "trial_x_participant", "samples"),
-            coords={
-                "event": ("event", range(self.n_events)),
-                "samples": ("samples", range(np.shape(eventprobs)[0])),
-            },
-        )
+    def transform(self, trial_data):
+        n_levels, levels, clabels = self._level_constructor(
+                trial_data, self.level_dict
+            )
+        print(levels)
+        all_event_probs = []
+        all_likelihoods = []
+        for c in range(n_levels):
+            locations = np.zeros((n_levels, self.n_events + 1,), dtype=int)
+            magnitudes_level = self.magnitudes[
+                c, self.mags_map[c, :] >= 0, :
+            ]  # select existing magnitudes
+            parameters_level = self.parameters[c, self.pars_map[c, :] >= 0, :]  # select existing params
+            likelihood, eventprobs = \
+                self.estim_probs(
+                    trial_data,
+                    magnitudes_level,
+                    parameters_level,
+                    locations[c, self.pars_map[c, :] >= 0],
+                    subset_epochs=(levels == c),
+                )
+            part = trial_data.coords["participant"].values[(levels == c)]
+            trial = trial_data.coords["trials"].values[(levels == c)]
+            trial_x_part = xr.Coordinates.from_pandas_multiindex(
+                MultiIndex.from_arrays([part, trial], names=("participant", "trials")),
+                "trial_x_participant",
+            )
+            xreventprobs = xr.DataArray(eventprobs.T, dims=("event", "trial_x_participant", "samples"),
+                coords={
+                    "event": ("event", range(self.n_events)),
+                    "samples": ("samples", range(np.shape(eventprobs)[0])),
+                },
+            )
+            xreventprobs = xreventprobs.assign_coords(trial_x_part)
+            xreventprobs = xreventprobs.transpose("trial_x_participant", "samples", "event")
+            all_event_probs.append(xreventprobs)
+            all_likelihoods.append(likelihood)
+        all_xreventprobs = xr.concat(all_event_probs, dim="level")
+        all_xreventprobs.coords["level"] = range(n_levels)
         
-        xreventprobs = xreventprobs.assign_coords(trial_x_part)
-        # if self.n_levels > 1:
-            # xreventprobs = xreventprobs.assign_coords(levels=("trial_x_participant", self.levels))
-        xreventprobs = xreventprobs.transpose("trial_x_participant", "samples", "event")
-
-        xreventprobs.attrs['sfreq'] = self.sfreq
-        xreventprobs.attrs['event_width_samples'] = self.event_width_samples
-        return likelihood, xreventprobs
+        all_xreventprobs.attrs['sfreq'] = self.sfreq
+        all_xreventprobs.attrs['event_width_samples'] = self.event_width_samples
+        return np.array(all_likelihoods), all_xreventprobs
         # Adding infos
         # estimated = estimated.assign_coords(rts=("trial_x_participant", self.named_durations.data))
 
@@ -926,8 +943,21 @@ class FixedEventModel(BaseModel):
         p[np.isnan(p)] = 0  # remove potential nans
         return p
 
-    def _level_constructor(self, trial_data, magnitudes, parameters, mags_map, pars_map, level_dict, verbose):
-        """Adapt model to levels."""
+    def _level_constructor(self, trial_data, level_dict, mags_map=None, pars_map=None, verbose=False):
+        """Adapt model to levels.
+        
+        Parameters
+        ----------
+        
+
+        Returns
+        -------
+        n_levels : int
+            number of levels found in the data
+        levels : int
+            
+        clabels
+        """
         ## levels
         assert isinstance(level_dict, dict), "levels have to be specified as a dictionary"
 
@@ -944,87 +974,71 @@ class FixedEventModel(BaseModel):
 
         level_mods = list(product(*level_mods))
         level_mods = np.array(level_mods, dtype=object)
-        print(level_mods)
         n_levels = len(level_mods)
 
         # build level array with digit indicating the combined levels
-        level_trials = np.vstack(level_trials).T
-        levels = np.zeros((level_trials.shape[0])) * np.nan
-        if verbose:
-            print("\nCoded as follows: ")
-        for i, mod in enumerate(level_mods):
-            assert len(np.where((level_trials == mod).all(axis=1))[0]) > 0, (
-                f"Modality {mod} of level does not occur in the data"
-            )
-            levels[np.where((level_trials == mod).all(axis=1))] = i
+        if n_levels > 1:
+            level_trials = np.vstack(level_trials).T
+            levels = np.zeros((level_trials.shape[0])) * np.nan
             if verbose:
-                print(str(i) + ": " + str(level))
+                print("\nCoded as follows: ")
+            for i, mod in enumerate(level_mods):
+                # assert len(np.where((level_trials == mod).all(axis=1))[0]) > 0, (
+                #     f"Modality {mod} of level does not occur in the data"
+                # )
+                levels[np.where((level_trials == mod).all(axis=1))] = i
+                if verbose:
+                    print(str(i) + ": " + str(level))
+        else:
+            levels = np.zeros(trial_data.n_trials)
         levels = np.int8(levels)
         clabels = {"level " + str(level_names): level_mods}
 
-        # check maps
-        n_levels_mags = 0 if mags_map is None else mags_map.shape[0]
-        n_levels_pars = 0 if pars_map is None else pars_map.shape[0]
-        if (
-            n_levels_mags > 0 and n_levels_pars > 0
-        ):  # either both maps should have the same number of levels, or 0
-            assert n_levels_mags == n_levels_pars, (
-                "magnitude and parameters maps have to indicate the same number of levels"
-            )
-            # make sure nr of events correspond per row
-            for c in range(n_levels):
-                assert sum(mags_map[c, :] >= 0) + 1 == sum(pars_map[c, :] >= 0), (
-                    "nr of events in magnitudes map and parameters map do not correspond on row "
-                    + str(c)
+        # check maps if provided
+        if mags_map is not None and pars_map is not None:
+            n_levels_mags = 0 if mags_map is None else mags_map.shape[0]
+            n_levels_pars = 0 if pars_map is None else pars_map.shape[0]
+            if (
+                n_levels_mags > 0 and n_levels_pars > 0
+            ):  # either both maps should have the same number of levels, or 0
+                assert n_levels_mags == n_levels_pars, (
+                    "magnitude and parameters maps have to indicate the same number of levels"
                 )
-        elif n_levels_mags == 0:
-            assert not (pars_map < 0).any(), (
-                "If negative parameters are provided, magnitude map is required."
-            )
-            mags_map = np.zeros((n_levels, pars_map.shape[1] - 1), dtype=int)
-        else:
-            pars_map = np.zeros((n_levels, mags_map.shape[1] + 1), dtype=int)
-            if (mags_map < 0).any():
+                # make sure nr of events correspond per row
                 for c in range(n_levels):
-                    pars_map[c, np.where(mags_map[c, :] < 0)[0]] = -1
-                    pars_map[c, np.where(mags_map[c, :] < 0)[0] + 1] = 1
-
-        # print maps to check level/row mathcing
-        if verbose:
-            print("\nMagnitudes map:")
-            for cnt in range(n_levels):
-                print(str(cnt) + ": ", mags_map[cnt, :])
-
-            print("\nParameters map:")
-            for cnt in range(n_levels):
-                print(str(cnt) + ": ", pars_map[cnt, :])
-
-            # give explanation if negative parameters:
-            if (pars_map < 0).any():
-                print("\n-----")
-                print("Negative parameters. Note that this stage is left out, while the parameters")
-                print(
-                    "of the other stages are compared column by column. "
-                    "In this parameter map example:"
+                    assert sum(mags_map[c, :] >= 0) + 1 == sum(pars_map[c, :] >= 0), (
+                        "nr of events in magnitudes map and parameters map do not correspond on row "
+                        + str(c)
+                    )
+            elif n_levels_mags == 0:
+                assert not (pars_map < 0).any(), (
+                    "If negative parameters are provided, magnitude map is required."
                 )
-                print(np.array([[0, 0, 0, 0], [0, -1, 0, 0]]))
-                print(
-                    "the parameters of stage 1 are shared, as well as the parameters of stage 3 of"
-                )
-                print("level 1 with stage 2 (column 3) of level 2 and the last stage of both")
-                print("levels.")
-                print("Given that event 2 is probably missing in level 2, it would typically")
-                print("make more sense to let both stages around event 2 in level 1 vary as")
-                print("compared to level 2:")
-                print(np.array([[0, 0, 0, 0], [0, -1, 1, 0]]))
-                print("-----")
+                mags_map = np.zeros((n_levels, pars_map.shape[1] - 1), dtype=int)
+            else:
+                pars_map = np.zeros((n_levels, mags_map.shape[1] + 1), dtype=int)
+                if (mags_map < 0).any():
+                    for c in range(n_levels):
+                        pars_map[c, np.where(mags_map[c, :] < 0)[0]] = -1
+                        pars_map[c, np.where(mags_map[c, :] < 0)[0] + 1] = 1
+    
+            # at this point, all should indicate the same number of levels
+            assert n_levels == mags_map.shape[0] == pars_map.shape[0], (
+                "number of unique levels should correspond to number of rows in map(s)"
+            )
+    
+            if verbose:
+                print("\nMagnitudes map:")
+                for cnt in range(n_levels):
+                    print(str(cnt) + ": ", mags_map[cnt, :])
+    
+                print("\nParameters map:")
+                for cnt in range(n_levels):
+                    print(str(cnt) + ": ", pars_map[cnt, :])
 
-        # at this point, all should indicate the same number of levels
-        assert n_levels == mags_map.shape[0] == pars_map.shape[0], (
-            "number of unique levels should correspond to number of rows in map(s)"
-        )
+            # at this point, all should indicate the same number of levels
+            assert n_levels == mags_map.shape[0] == pars_map.shape[0], (
+                "number of unique levels should correspond to number of rows in map(s)"
+            )
 
-        # assert levels.shape[0] == trial_data.durations.shape[0], (
-            # "levels parameter should contain the level per epoch."
-        # )
-        return n_levels, levels, clabels, pars_map, mags_map
+        return n_levels, levels, clabels

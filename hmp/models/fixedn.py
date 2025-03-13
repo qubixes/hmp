@@ -328,13 +328,13 @@ class FixedEventModel(BaseModel):
             MultiIndex.from_arrays([part, trial], names=("participant", "trials")),
             "trial_x_participant",
         )
-        xreventprobs = xr.Dataset(
-            {"eventprobs": (("event", "trial_x_participant", "samples"), eventprobs.T)},
-            {
+        xreventprobs = xr.DataArray(eventprobs.T, dims=("event", "trial_x_participant", "samples"),
+            coords={
                 "event": ("event", range(self.n_events)),
                 "samples": ("samples", range(np.shape(eventprobs)[0])),
             },
         )
+        
         xreventprobs = xreventprobs.assign_coords(trial_x_part)
         # if self.n_levels > 1:
             # xreventprobs = xreventprobs.assign_coords(levels=("trial_x_participant", self.levels))

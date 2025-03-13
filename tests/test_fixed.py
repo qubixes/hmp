@@ -56,3 +56,10 @@ def test_fixed():
     
     assert np.isclose(np.sum(np.abs(true_topos.data - test_topos.data)), 0, atol=1e-4, rtol=0)
     assert np.isclose(likelihood, np.array(0.85561476), atol=1e-4, rtol=0)
+
+    # testing recovery of attributes
+    model.xrlikelihoods
+    model.xrmags
+    model.xrparams
+    model.param_dev
+    model.xrtraces

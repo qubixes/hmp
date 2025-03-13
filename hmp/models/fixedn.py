@@ -375,7 +375,7 @@ class FixedEventModel(BaseModel):
             dims=("em_iteration"),
             name="traces",
             coords={
-                "em_iteration": range(len(self.traces.shape[1]))}
+                "em_iteration": range(self.traces.shape[0])}
         )
 
     @property
@@ -391,8 +391,8 @@ class FixedEventModel(BaseModel):
                 dims=( "em_iteration", "level", "stage", "parameter"),
                 name="param_dev",
                 coords=[
-                    range(len(self.param_dev.shape[0])),
-                    range(len(self.param_dev.shape[1])),
+                    range(self.param_dev.shape[0]),
+                    range(self.param_dev.shape[1]),
                     range(self.n_events + 1),
                     ["shape", "scale"],
                 ],

@@ -46,9 +46,10 @@ def test_fixed():
     model = FixedEventModel(event_properties, n_events=n_events)
     sim_source_times, true_pars, true_magnitudes, _ = \
         simulations.simulated_times_and_parameters(event_a, model, trial_data)
-
-    true_loglikelihood, true_estimates = model.transform(
-        trial_data, parameters = np.array([true_pars]), magnitudes=np.array([true_magnitudes]))
+    # Giving true parameter to model
+    model.parameters = np.array([true_pars])
+    model.magnitudes = np.array([true_magnitudes])
+    true_loglikelihood, true_estimates = model.transform(trial_data)
     true_topos = hmp.utils.event_topo(epoch_data, true_estimates.squeeze(), mean=True)
     likelihood, estimates = model.fit_transform(trial_data, verbose=True)
     test_topos = hmp.utils.event_topo(epoch_data, estimates.squeeze(), mean=True)

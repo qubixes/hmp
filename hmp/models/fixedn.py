@@ -146,7 +146,7 @@ class FixedEventModel(BaseModel):
             pars_map, mags_map = np.zeros((1, self.n_events + 1)), np.zeros((1, self.n_events))
         else:
             n_levels, levels, clabels, pars_map, mags_map = self._level_constructor(
-                magnitudes, parameters, mags_map, pars_map, level_dict, verbose
+                trial_data, magnitudes, parameters, mags_map, pars_map, level_dict, verbose
             )
             infos_to_store["mags_map"] = mags_map
             infos_to_store["pars_map"] = pars_map
@@ -340,7 +340,8 @@ class FixedEventModel(BaseModel):
             # xreventprobs = xreventprobs.assign_coords(levels=("trial_x_participant", self.levels))
         xreventprobs = xreventprobs.transpose("trial_x_participant", "samples", "event")
 
-
+        xreventprobs.attrs['sfreq'] = self.sfreq
+        xreventprobs.attrs['event_width_samples'] = self.event_width_samples
         return likelihood, xreventprobs
         # Adding infos
         # estimated = estimated.assign_coords(rts=("trial_x_participant", self.named_durations.data))
@@ -929,7 +930,7 @@ class FixedEventModel(BaseModel):
         p[np.isnan(p)] = 0  # remove potential nans
         return p
 
-    def _level_constructor(self, magnitudes, parameters, mags_map, pars_map, level_dict, verbose):
+    def _level_constructor(self, trial_data, magnitudes, parameters, mags_map, pars_map, level_dict, verbose):
         """Adapt model to levels."""
         ## levels
         assert isinstance(level_dict, dict), "levels have to be specified as a dictionary"
@@ -941,7 +942,7 @@ class FixedEventModel(BaseModel):
         for level in level_dict.keys():
             level_names.append(level)
             level_mods.append(level_dict[level])
-            level_trials.append(self.trial_coords[level])
+            level_trials.append(trial_data.trial_coords[level])
             if verbose:
                 print('Level "' + level_names[-1] + '" analyzed, with levels:', level_mods[-1])
 

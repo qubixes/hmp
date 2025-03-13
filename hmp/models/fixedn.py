@@ -131,6 +131,8 @@ class FixedEventModel(BaseModel):
             f"{self.n_events} events do not fit given the minimum duration of {min(trial_data.durations)}"
             " and a location of {self.location}"
         )
+        self.n_dims = trial_data.n_dims 
+
 
         if self.starting_points > 1 and self.max_scale is None:
             raise ValueError(
@@ -213,7 +215,7 @@ class FixedEventModel(BaseModel):
 
         if magnitudes is None:
             # By defaults mags are initiated to 0
-            magnitudes = np.zeros((n_levels, self.n_events, trial_data.n_dims), dtype=np.float64)
+            magnitudes = np.zeros((n_levels, self.n_events, self.n_dims), dtype=np.float64)
             if (mags_map < 0).any():  # set missing mags to nan
                 for c in range(n_levels):
                     magnitudes[c, np.where(mags_map[c, :] < 0)[0], :] = np.nan
@@ -410,7 +412,8 @@ class FixedEventModel(BaseModel):
                 },
         )
 
-    def xrmags(self, trial_data):
+    @property
+    def xrmags(self):
         self._check_fitted("get xrmags")
         return xr.DataArray(
                 self.magnitudes,
@@ -419,7 +422,7 @@ class FixedEventModel(BaseModel):
                 coords={
                     "level": range(self.magnitudes.shape[0]),
                     "event": range(self.n_events),
-                    "component": range(trial_data.n_dims),
+                    "component": range(self.n_dims),
                 },
             )
 

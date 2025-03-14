@@ -139,7 +139,7 @@ class FixedEventModel(BaseModel):
         if self.starting_points > 1 and self.max_scale is None:
             raise ValueError(
                     "If using multiple starting points, a maximum distance between events needs "
-                    " to be provided using the max_scale argument"
+                    " to be provided using the max_scale argument."
                 )
 
         if level_dict is None:

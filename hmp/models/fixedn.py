@@ -881,35 +881,35 @@ class FixedEventModel(BaseModel):
                     self.estim_probs,
                     zip(
                         itertools.repeat(trial_data),
-                        [magnitudes[c, mags_map[c, :] >= 0, :] for c in range(n_levels)],
-                        [parameters[c, pars_map[c, :] >= 0, :] for c in range(n_levels)],
-                        [locations[c, pars_map[c, :] >= 0] for c in range(n_levels)],
+                        [magnitudes[cur_level, mags_map[cur_level, :] >= 0, :] for cur_level in range(n_levels)],
+                        [parameters[cur_level, pars_map[cur_level, :] >= 0, :] for cur_level in range(n_levels)],
+                        [locations[cur_level, pars_map[cur_level, :] >= 0] for cur_level in range(n_levels)],
                         itertools.repeat(None),
-                        [levels == c for c in range(n_levels)],
+                        [levels == cur_level for cur_level in range(n_levels)],
                         itertools.repeat(False),
                     ),
                 )
         else:
-            for c in range(n_levels):
+            for cur_level in range(n_levels):
                 magnitudes_level = magnitudes[
-                    c, mags_map[c, :] >= 0, :
+                    cur_level, mags_map[cur_level, :] >= 0, :
                 ]  # select existing magnitudes
-                parameters_level = parameters[c, pars_map[c, :] >= 0, :]  # select existing params
+                parameters_level = parameters[cur_level, pars_map[cur_level, :] >= 0, :]  # select existing params
                 likes_events_level.append(
                     self.estim_probs(
                         trial_data,
                         magnitudes_level,
                         parameters_level,
-                        locations[c, pars_map[c, :] >= 0],
-                        subset_epochs=(levels == c),
+                        locations[cur_level, pars_map[cur_level, :] >= 0],
+                        subset_epochs=(levels == cur_level),
                     )
                 )
 
         likelihood = np.sum([x[0] for x in likes_events_level])
         eventprobs = np.zeros((trial_data.max_duration, len(levels), mags_map.shape[1]))
-        for c in range(n_levels):
-            eventprobs[np.ix_(range(trial_data.max_duration), levels == c, mags_map[c, :] >= 0)] = (
-                likes_events_level[c][1]
+        for cur_level in range(n_levels):
+            eventprobs[np.ix_(range(trial_data.max_duration), levels == cur_level, mags_map[cur_level, :] >= 0)] = (
+                likes_events_level[cur_level][1]
             )
 
         return [likelihood, eventprobs]

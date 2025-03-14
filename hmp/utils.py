@@ -913,7 +913,7 @@ def event_times(
     if estimate_method is None:
         estimate_method = "max"
     event_shift = 0
-    eventprobs = estimates.eventprobs.fillna(0).copy()
+    eventprobs = estimates.fillna(0).copy()
     if estimate_method == "max":
         times = eventprobs.argmax("samples") - event_shift  # Most likely event location
     else:
@@ -1111,7 +1111,7 @@ def event_topo(
         .data.fillna(0)
         .drop_duplicates("trial_x_participant")
     )
-    estimated = estimated.eventprobs.fillna(0).copy()
+    estimated = estimated.fillna(0).copy()
     n_events = estimated.event.count().values
     n_trials = estimated.trial_x_participant.count().values
     n_channels = epoch_data.channels.count().values
@@ -1246,11 +1246,11 @@ def load(filename):
     ):
         # Ensures correct order of dimensions for later index use
         if "iteration" in data:
-            data["eventprobs"] = data.eventprobs.transpose(
+            data = data.transpose(
                 "iteration", "trial_x_participant", "samples", "event"
             )
         else:
-            data["eventprobs"] = data.eventprobs.transpose(
+            data = data.transpose(
                 "trial_x_participant", "samples", "event"
             )
     return data

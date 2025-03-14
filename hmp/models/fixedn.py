@@ -524,7 +524,7 @@ class FixedEventModel(BaseModel):
 
         while i < max_iteration:  # Expectation-Maximization algorithm
             if i >= min_iteration and (
-                np.isneginf(lkh) or tolerance > (lkh - lkh_prev) / np.abs(lkh_prev)
+                tolerance > ((lkh - lkh_prev) / np.abs(lkh_prev)).all()
             ):
                 break
 
@@ -905,7 +905,7 @@ class FixedEventModel(BaseModel):
                     )
                 )
 
-        likelihood = np.sum([x[0] for x in likes_events_level])
+        likelihood = np.array([x[0] for x in likes_events_level])
         eventprobs = np.zeros((trial_data.max_duration, len(levels), mags_map.shape[1]))
         for cur_level in range(n_levels):
             eventprobs[np.ix_(range(trial_data.max_duration), levels == cur_level, mags_map[cur_level, :] >= 0)] = (

@@ -146,7 +146,7 @@ class FixedEventModel(BaseModel):
             level_dict = self.level_dict
             mags_map = self.mags_map
             pars_map = self.pars_map
-        n_levels, levels, clabels = self._level_constructor(
+        n_levels, levels, clabels = self.level_constructor(
             trial_data, level_dict, mags_map, pars_map, verbose
         )
         infos_to_store["mags_map"] = mags_map
@@ -310,7 +310,7 @@ class FixedEventModel(BaseModel):
         self._fitted = True
 
     def transform(self, trial_data):
-        n_levels, levels, clabels = self._level_constructor(
+        n_levels, levels, clabels = self.level_constructor(
                 trial_data, self.level_dict
             )
         all_event_probs = []
@@ -939,20 +939,8 @@ class FixedEventModel(BaseModel):
         p[np.isnan(p)] = 0  # remove potential nans
         return p
 
-    def _level_constructor(self, trial_data, level_dict, mags_map=None, pars_map=None, verbose=False):
+    def level_constructor(self, trial_data, level_dict, mags_map=None, pars_map=None, verbose=False):
         """Adapt model to levels.
-        
-        Parameters
-        ----------
-        
-
-        Returns
-        -------
-        n_levels : int
-            number of levels found in the data
-        levels : int
-            
-        clabels
         """
         ## levels
         assert isinstance(level_dict, dict), "levels have to be specified as a dictionary"

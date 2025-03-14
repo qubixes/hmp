@@ -734,15 +734,12 @@ class FixedEventModel(BaseModel):
         if subset_epochs is not None:
             if len(subset_epochs) == trial_data.n_trials:  # boolean indices
                 subset_epochs = np.where(subset_epochs)[0]
-            n_trials = len(subset_epochs)
-            durations = trial_data.durations[subset_epochs]
-            starts = trial_data.starts[subset_epochs]
-            ends = trial_data.ends[subset_epochs]
         else:
-            n_trials = trial_data.n_trials
-            durations = trial_data.durations
-            starts = trial_data.starts
-            ends = trial_data.ends
+            subset_epochs = np.arange(n_trials)
+        n_trials = len(subset_epochs)
+        durations = trial_data.durations[subset_epochs]
+        starts = trial_data.starts[subset_epochs]
+        ends = trial_data.ends[subset_epochs]
 
         gains = np.zeros((trial_data.n_samples, n_events), dtype=np.float64)
         for i in range(trial_data.n_dims):

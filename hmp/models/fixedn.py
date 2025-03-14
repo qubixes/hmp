@@ -532,13 +532,13 @@ class FixedEventModel(BaseModel):
             lkh_prev = lkh.copy()
             parameters_prev = parameters.copy()
 
-            for c in range(n_levels):  # get params/mags
-                mags_map_level = np.where(mags_map[c, :] >= 0)[0]
-                pars_map_level = np.where(pars_map[c, :] >= 0)[0]
-                epochs_level = np.where(levels == c)[0]
+            for cur_level in range(n_levels):  # get params/mags
+                mags_map_level = np.where(mags_map[cur_level, :] >= 0)[0]
+                pars_map_level = np.where(pars_map[cur_level, :] >= 0)[0]
+                epochs_level = np.where(levels == cur_level)[0]
 
                 # get mags/pars by level
-                magnitudes[c, mags_map_level, :], parameters[c, pars_map_level, :] = (
+                magnitudes[cur_level, mags_map_level, :], parameters[cur_level, pars_map_level, :] = (
                     self.get_magnitudes_parameters_expectation(
                         trial_data,
                         eventprobs[np.ix_(range(trial_data.max_duration), epochs_level, mags_map_level)],
@@ -546,11 +546,11 @@ class FixedEventModel(BaseModel):
                     )
                 )
 
-                magnitudes[c, magnitudes_to_fix, :] = initial_magnitudes[
-                    c, magnitudes_to_fix, :
+                magnitudes[cur_level, magnitudes_to_fix, :] = initial_magnitudes[
+                    cur_level, magnitudes_to_fix, :
                 ].copy()
-                parameters[c, parameters_to_fix, :] = initial_parameters[
-                    c, parameters_to_fix, :
+                parameters[cur_level, parameters_to_fix, :] = initial_parameters[
+                    cur_level, parameters_to_fix, :
                 ].copy()
 
             # set mags to mean if requested in map

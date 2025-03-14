@@ -185,15 +185,15 @@ class FixedEventModel(BaseModel):
             parameters = (
                 np.zeros((n_levels, self.n_events + 1, 2)) * np.nan
             )  # by default nan for missing stages
-            for c in range(n_levels):
-                pars_level = np.where(pars_map[c, :] >= 0)[0]
+            for cur_level in range(n_levels):
+                pars_level = np.where(pars_map[cur_level, :] >= 0)[0]
                 n_stage_level = len(pars_level)
                 # by default starting point is to split the average duration in equal bins
-                parameters[c, pars_level, :] = np.tile(
+                parameters[cur_level, pars_level, :] = np.tile(
                     [
                         self.shape,
                         self.mean_to_scale(
-                            np.mean(trial_data.durations[levels == c]) / (n_stage_level), self.shape
+                            np.mean(trial_data.durations[levels == cur_level]) / (n_stage_level), self.shape
                         ),
                     ],
                     (n_stage_level, 1),
@@ -209,15 +209,15 @@ class FixedEventModel(BaseModel):
 
             # set params missing stages to nan to make it obvious in the results
             if (pars_map < 0).any():
-                for c in range(n_levels):
-                    parameters[c, np.where(pars_map[c, :] < 0)[0], :] = np.nan
+                for cur_level in range(n_levels):
+                    parameters[cur_level, np.where(pars_map[cur_level, :] < 0)[0], :] = np.nan
 
         if magnitudes is None:
             # By defaults mags are initiated to 0
             magnitudes = np.zeros((n_levels, self.n_events, self.n_dims), dtype=np.float64)
             if (mags_map < 0).any():  # set missing mags to nan
-                for c in range(n_levels):
-                    magnitudes[c, np.where(mags_map[c, :] < 0)[0], :] = np.nan
+                for cur_level in range(n_levels):
+                    magnitudes[cur_level, np.where(mags_map[cur_level, :] < 0)[0], :] = np.nan
         else:
             infos_to_store["sp_magnitudes"] = magnitudes
             if len(np.shape(magnitudes)) == 2:  # broadcast provided magnitudes across levels
@@ -228,8 +228,8 @@ class FixedEventModel(BaseModel):
 
             # set mags missing events to nan to make it obvious in the results
             if (mags_map < 0).any():
-                for c in range(n_levels):
-                    magnitudes[c, np.where(mags_map[c, :] < 0)[0], :] = np.nan
+                for cur_level in range(n_levels):
+                    magnitudes[cur_level, np.where(mags_map[cur_level, :] < 0)[0], :] = np.nan
         initial_p = parameters
         initial_m = magnitudes
         parameters = [initial_p]
@@ -240,11 +240,11 @@ class FixedEventModel(BaseModel):
                 proposal_p = (
                     np.zeros((n_levels, self.n_events + 1, 2)) * np.nan
                 )  # by default nan for missing stages
-                for c in range(n_levels):
-                    pars_level = np.where(pars_map[c, :] >= 0)[0]
+                for cur_level in range(n_levels):
+                    pars_level = np.where(pars_map[cur_level, :] >= 0)[0]
                     n_stage_level = len(pars_level)
-                    proposal_p[c, pars_level, :] = self.gen_random_stages(n_stage_level - 1)
-                    proposal_p[c, parameters_to_fix, :] = initial_p[0, parameters_to_fix]
+                    proposal_p[cur_level, pars_level, :] = self.gen_random_stages(n_stage_level - 1)
+                    proposal_p[cur_level, parameters_to_fix, :] = initial_p[0, parameters_to_fix]
                 parameters.append(proposal_p)
             parameters = np.array(parameters)
 
@@ -315,22 +315,22 @@ class FixedEventModel(BaseModel):
             )
         all_event_probs = []
         all_likelihoods = []
-        for c in range(n_levels):
+        for cur_level in range(n_levels):
             locations = np.zeros((n_levels, self.n_events + 1,), dtype=int)
             magnitudes_level = self.magnitudes[
-                c, self.mags_map[c, :] >= 0, :
+                cur_level, self.mags_map[cur_level, :] >= 0, :
             ]  # select existing magnitudes
-            parameters_level = self.parameters[c, self.pars_map[c, :] >= 0, :]  # select existing params
+            parameters_level = self.parameters[cur_level, self.pars_map[cur_level, :] >= 0, :]  # select existing params
             likelihood, eventprobs = \
                 self.estim_probs(
                     trial_data,
                     magnitudes_level,
                     parameters_level,
-                    locations[c, self.pars_map[c, :] >= 0],
-                    subset_epochs=(levels == c),
+                    locations[cur_level, self.pars_map[cur_level, :] >= 0],
+                    subset_epochs=(levels == cur_level),
                 )
-            part = trial_data.coords["participant"].values[(levels == c)]
-            trial = trial_data.coords["trials"].values[(levels == c)]
+            part = trial_data.coords["participant"].values[(levels == cur_level)]
+            trial = trial_data.coords["trials"].values[(levels == cur_level)]
             trial_x_part = xr.Coordinates.from_pandas_multiindex(
                 MultiIndex.from_arrays([part, trial], names=("participant", "trials")),
                 "trial_x_participant",
@@ -1002,10 +1002,10 @@ class FixedEventModel(BaseModel):
                     "magnitude and parameters maps have to indicate the same number of levels"
                 )
                 # make sure nr of events correspond per row
-                for c in range(n_levels):
-                    assert sum(mags_map[c, :] >= 0) + 1 == sum(pars_map[c, :] >= 0), (
+                for cur_level in range(n_levels):
+                    assert sum(mags_map[cur_level, :] >= 0) + 1 == sum(pars_map[cur_level, :] >= 0), (
                         "nr of events in magnitudes map and parameters map do not correspond on row "
-                        + str(c)
+                        + str(cur_level)
                     )
             elif n_levels_mags == 0:
                 assert not (pars_map < 0).any(), (
@@ -1015,9 +1015,9 @@ class FixedEventModel(BaseModel):
             else:
                 pars_map = np.zeros((n_levels, mags_map.shape[1] + 1), dtype=int)
                 if (mags_map < 0).any():
-                    for c in range(n_levels):
-                        pars_map[c, np.where(mags_map[c, :] < 0)[0]] = -1
-                        pars_map[c, np.where(mags_map[c, :] < 0)[0] + 1] = 1
+                    for cur_level in range(n_levels):
+                        pars_map[cur_level, np.where(mags_map[cur_level, :] < 0)[0]] = -1
+                        pars_map[cur_level, np.where(mags_map[cur_level, :] < 0)[0] + 1] = 1
     
             # at this point, all should indicate the same number of levels
             assert n_levels == mags_map.shape[0] == pars_map.shape[0], (

@@ -143,21 +143,16 @@ class FixedEventModel(BaseModel):
                 )
 
         if level_dict is None:
-            (
-                n_levels,
-                levels,
-            ) = 1, np.zeros(trial_data.n_trials)
-            pars_map, mags_map = np.zeros((1, self.n_events + 1)), np.zeros((1, self.n_events))
-            level_dict = {}
-            clabels = ''
-        else:
-            n_levels, levels, clabels = self._level_constructor(
-                trial_data, level_dict, mags_map, pars_map, verbose
-            )
-            infos_to_store["mags_map"] = mags_map
-            infos_to_store["pars_map"] = pars_map
-            infos_to_store["clabels"] = clabels
-            infos_to_store["level_dict"] = level_dict
+            level_dict = self.level_dict
+            mags_map = self.mags_map
+            pars_map = self.pars_map
+        n_levels, levels, clabels = self._level_constructor(
+            trial_data, level_dict, mags_map, pars_map, verbose
+        )
+        infos_to_store["mags_map"] = mags_map
+        infos_to_store["pars_map"] = pars_map
+        infos_to_store["clabels"] = clabels
+        infos_to_store["level_dict"] = level_dict
         if verbose:
             if parameters is None:
                 print(
@@ -961,7 +956,8 @@ class FixedEventModel(BaseModel):
         """
         ## levels
         assert isinstance(level_dict, dict), "levels have to be specified as a dictionary"
-
+        if len(level_dict.keys()) == 0:
+            verbose = False
         # collect level names, levels, and trial coding
         level_names = []
         level_mods = []

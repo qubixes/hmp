@@ -313,10 +313,15 @@ class FixedEventModel(BaseModel):
         self._fitted = True
 
     def transform(self, trial_data):
+        try: 
+             self.level_dict
+        except: 
+            self.level_dict = {}
+            self.pars_map = np.zeros((1,self.n_events+1))
+            self.mags_map = np.zeros((1,self.n_events))
         n_levels, levels, clabels = self._level_constructor(
                 trial_data, self.level_dict
             )
-        print(levels)
         all_event_probs = []
         all_likelihoods = []
         for c in range(n_levels):

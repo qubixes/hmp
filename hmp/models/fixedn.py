@@ -321,8 +321,7 @@ class FixedEventModel(BaseModel):
                 c, self.mags_map[c, :] >= 0, :
             ]  # select existing magnitudes
             parameters_level = self.parameters[c, self.pars_map[c, :] >= 0, :]  # select existing params
-            likelihood, eventprobs = \
-                self.estim_probs(
+            likelihood, eventprobs =  self.estim_probs(
                     trial_data,
                     magnitudes_level,
                     parameters_level,

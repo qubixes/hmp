@@ -43,6 +43,7 @@ class FixedEventModel(BaseModel):
         self._fitted = False
         self.max_scale = max_scale
         self.level_dict = {}
+        self.n_levels = 1
         self.pars_map = np.zeros((1,self.n_events+1))
         self.mags_map = np.zeros((1,self.n_events))
         super().__init__(*args, **kwargs)
@@ -310,9 +311,10 @@ class FixedEventModel(BaseModel):
         self._fitted = True
 
     def transform(self, trial_data):
-        n_levels, levels, clabels = self.level_constructor(
+        _, levels, clabels = self.level_constructor(
                 trial_data, self.level_dict
             )
+        n_levels = self.n_levels
         all_event_probs = []
         all_likelihoods = []
         for cur_level in range(n_levels):
@@ -329,6 +331,7 @@ class FixedEventModel(BaseModel):
                     locations[cur_level, self.pars_map[cur_level, :] >= 0],
                     subset_epochs=(levels == cur_level),
                 )
+
             part = trial_data.coords["participant"].values[(levels == cur_level)]
             trial = trial_data.coords["trials"].values[(levels == cur_level)]
             trial_x_part = xr.Coordinates.from_pandas_multiindex(
@@ -808,31 +811,11 @@ class FixedEventModel(BaseModel):
 
         eventprobs = forward * backward
         eventprobs = np.clip(eventprobs, 0, None)  # floating point precision error
-        # eventprobs can be so low as to be 0, avoid dividing by 0
-        # this only happens when magnitudes are 0 and gammas are randomly determined
-        if (eventprobs.sum(axis=0) == 0).any() or (eventprobs[:, :, 0].sum(axis=0) == 0).any():
-            # set likelihood
-            eventsums = eventprobs[:, :, 0].sum(axis=0)
-            eventsums[eventsums != 0] = np.log(eventsums[eventsums != 0])
-            eventsums[eventsums == 0] = -np.inf
-            likelihood = np.sum(eventsums)
 
-            # set eventprobs, check if any are 0
-            eventsums = eventprobs.sum(axis=0)
-            if (eventsums == 0).any():
-                for i in range(eventprobs.shape[0]):
-                    eventprobs[i, :, :][eventsums == 0] = 0
-                    eventprobs[i, :, :][eventsums != 0] = (
-                        eventprobs[i, :, :][eventsums != 0] / eventsums[eventsums != 0]
-                    )
-            else:
-                eventprobs = eventprobs / eventprobs.sum(axis=0)
-
-        else:
-            likelihood = np.sum(
-                np.log(eventprobs[:, :, 0].sum(axis=0))
-            )  # sum over max_samples to avoid 0s in log
-            eventprobs = eventprobs / eventprobs.sum(axis=0)
+        likelihood = np.sum(
+            np.log(eventprobs[:, :, 0].sum(axis=0))
+        )  # sum over max_samples to avoid 0s in log
+        eventprobs = eventprobs / eventprobs.sum(axis=0)
 
         if by_trial_lkh:
             return forward * backward

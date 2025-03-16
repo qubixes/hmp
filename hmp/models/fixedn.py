@@ -314,7 +314,6 @@ class FixedEventModel(BaseModel):
         n_levels, levels, clabels = self.level_constructor(
                 trial_data, self.level_dict
             )
-        print(levels)
         data_levels = np.unique(levels)
         n_levels = self.n_levels
         all_event_probs = []
@@ -382,10 +381,12 @@ class FixedEventModel(BaseModel):
         self._check_fitted("get traces")
         return xr.DataArray(
             self.traces,
-            dims=("em_iteration"),
+            dims=("em_iteration","level"),
             name="traces",
             coords={
-                "em_iteration": range(self.traces.shape[0])}
+                "em_iteration": range(self.traces.shape[0]),
+                "level": range(self.traces.shape[1]),
+            }
         )
 
     @property

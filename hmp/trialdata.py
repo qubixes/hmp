@@ -25,7 +25,6 @@ class TrialData():
     ends: Any
     n_trials: int
     n_samples: int
-    n_dims: int
     cross_corr: Any
     trial_coords: Any
 

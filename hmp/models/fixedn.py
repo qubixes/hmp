@@ -311,14 +311,16 @@ class FixedEventModel(BaseModel):
         self._fitted = True
 
     def transform(self, trial_data):
-        _, levels, clabels = self.level_constructor(
+        n_levels, levels, clabels = self.level_constructor(
                 trial_data, self.level_dict
             )
+        print(levels)
+        data_levels = np.unique(levels)
         n_levels = self.n_levels
         all_event_probs = []
         all_likelihoods = []
-        for cur_level in range(n_levels):
-            locations = np.zeros((n_levels, self.n_events + 1,), dtype=int)
+        for cur_level in data_levels:
+            locations = np.zeros((self.n_events + 1,), dtype=int)
             magnitudes_level = self.magnitudes[
                 cur_level, self.mags_map[cur_level, :] >= 0, :
             ]  # select existing magnitudes
@@ -328,10 +330,9 @@ class FixedEventModel(BaseModel):
                     trial_data,
                     magnitudes_level,
                     parameters_level,
-                    locations[cur_level, self.pars_map[cur_level, :] >= 0],
+                    locations[self.pars_map[cur_level, :] >= 0],
                     subset_epochs=(levels == cur_level),
                 )
-
             part = trial_data.coords["participant"].values[(levels == cur_level)]
             trial = trial_data.coords["trials"].values[(levels == cur_level)]
             trial_x_part = xr.Coordinates.from_pandas_multiindex(
@@ -349,7 +350,7 @@ class FixedEventModel(BaseModel):
             all_event_probs.append(xreventprobs)
             all_likelihoods.append(likelihood)
         all_xreventprobs = xr.concat(all_event_probs, dim="level")
-        all_xreventprobs.coords["level"] = range(n_levels)
+        all_xreventprobs.coords["level"] = data_levels
         
         all_xreventprobs.attrs['sfreq'] = self.sfreq
         all_xreventprobs.attrs['event_width_samples'] = self.event_width_samples
@@ -544,7 +545,7 @@ class FixedEventModel(BaseModel):
                 magnitudes[cur_level, mags_map_level, :], parameters[cur_level, pars_map_level, :] = (
                     self.get_magnitudes_parameters_expectation(
                         trial_data,
-                        eventprobs[np.ix_(range(trial_data.max_duration), epochs_level, mags_map_level)],
+                        eventprobs[np.ix_(range(np.max(trial_data.durations[epochs_level])), epochs_level, mags_map_level)],
                         subset_epochs=epochs_level,
                     )
                 )
@@ -597,7 +598,7 @@ class FixedEventModel(BaseModel):
         # Magnitudes from Expectation, Eq 11 from 2024 paper
         for event in range(n_events):
             for comp in range(trial_data.n_dims):
-                event_data = np.zeros((trial_data.max_duration, len(subset_epochs)))
+                event_data = np.zeros((np.max(trial_data.durations[subset_epochs]), len(subset_epochs)))
                 for trial_idx, trial in enumerate(subset_epochs):
                     start, end = trial_data.starts[trial], trial_data.ends[trial]
                     duration = end - start + 1
@@ -614,7 +615,7 @@ class FixedEventModel(BaseModel):
         # it's general
         event_times_mean = np.concatenate(
             [
-                np.arange(trial_data.max_duration) @ eventprobs.mean(axis=1),
+                np.arange(np.max(trial_data.durations[subset_epochs])) @ eventprobs.mean(axis=1),
                 [np.mean(trial_data.durations[subset_epochs]) - 1],
             ]
         )
@@ -743,7 +744,7 @@ class FixedEventModel(BaseModel):
         durations = trial_data.durations[subset_epochs]
         starts = trial_data.starts[subset_epochs]
         ends = trial_data.ends[subset_epochs]
-
+        max_duration = np.max(durations)
         gains = np.zeros((trial_data.n_samples, n_events), dtype=np.float64)
         for i in range(trial_data.n_dims):
             # computes the gains, i.e. congruence between the pattern shape
@@ -754,9 +755,9 @@ class FixedEventModel(BaseModel):
                 - magnitudes[:, i] ** 2 / 2
             )
         gains = np.exp(gains)
-        probs = np.zeros([trial_data.max_duration, n_trials, n_events], dtype=np.float64)  # prob per trial
+        probs = np.zeros([max_duration, n_trials, n_events], dtype=np.float64)  # prob per trial
         probs_b = np.zeros(
-            [trial_data.max_duration, n_trials, n_events], dtype=np.float64
+            [max_duration, n_trials, n_events], dtype=np.float64
         )  # Sample and state reversed
         for trial in np.arange(n_trials):
             # Following assigns gain per trial to variable probs
@@ -767,20 +768,20 @@ class FixedEventModel(BaseModel):
                 ::-1, ::-1
             ]
 
-        pmf = np.zeros([trial_data.max_duration, n_stages], dtype=np.float64)  # Gamma pmf for each stage scale
+        pmf = np.zeros([max_duration, n_stages], dtype=np.float64)  # Gamma pmf for each stage scale
         for stage in range(n_stages):
             pmf[:, stage] = np.concatenate(
                 (
                     np.repeat(0, locations[stage]),
-                    self.distribution_pmf(parameters[stage, 0], parameters[stage, 1], trial_data.max_duration)[
+                    self.distribution_pmf(parameters[stage, 0], parameters[stage, 1], max_duration)[
                         locations[stage] :
                     ],
                 )
             )
         pmf_b = pmf[:, ::-1]  # Stage reversed gamma pmf, same order as prob_b
 
-        forward = np.zeros((trial_data.max_duration, n_trials, n_events), dtype=np.float64)
-        backward = np.zeros((trial_data.max_duration, n_trials, n_events), dtype=np.float64)
+        forward = np.zeros((max_duration, n_trials, n_events), dtype=np.float64)
+        backward = np.zeros((max_duration, n_trials, n_events), dtype=np.float64)
         # Computing forward and backward helper variable
         #  when stage = 0:
         forward[:, :, 0] = (
@@ -797,11 +798,11 @@ class FixedEventModel(BaseModel):
             for trial in np.arange(n_trials):
                 # convolution between gamma * gains at previous event and event
                 forward[:, trial, event] = np.convolve(forward[:, trial, event - 1], pmf[:, event])[
-                    : trial_data.max_duration
+                    : max_duration
                 ]
                 # same but backwards
                 backward[:, trial, event] = np.convolve(add_b[:, trial], pmf_b[:, event])[
-                    : trial_data.max_duration
+                    : max_duration
                 ]
             forward[:, :, event] = forward[:, :, event] * probs[:, :, event]
         # re-arranging backward to the expected variable
@@ -889,9 +890,10 @@ class FixedEventModel(BaseModel):
                 )
 
         likelihood = np.array([x[0] for x in likes_events_level])
-        eventprobs = np.zeros((trial_data.max_duration, len(levels), mags_map.shape[1]))
+        eventprobs = np.zeros((np.max(trial_data.durations), len(levels), mags_map.shape[1]))
         for cur_level in range(n_levels):
-            eventprobs[np.ix_(range(trial_data.max_duration), levels == cur_level, mags_map[cur_level, :] >= 0)] = (
+            max_duration = np.max(trial_data.durations[levels == cur_level])
+            eventprobs[np.ix_(range(max_duration), levels == cur_level, mags_map[cur_level, :] >= 0)] = (
                 likes_events_level[cur_level][1]
             )
 

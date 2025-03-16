@@ -77,14 +77,6 @@ class TrialData():
                    trial_coords=trial_coords)
 
     @cached_property
-    def max_duration(self):
-        return self.durations.max()
-
-    @cached_property
-    def mean_duration(self):
-        return self.durations.mean()
-
-    @cached_property
     def durations(self):
         return self.ends - self.starts + 1
 

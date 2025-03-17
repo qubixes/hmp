@@ -293,10 +293,10 @@ class FixedEventModel(BaseModel):
         else:
             max_lkhs = 0
         self.lkhs = self.lkhs[max_lkhs]
-        self.magnitudes =  np.array([x[1] for x in estimates])[max_lkhs]
-        self.parameters = np.array([x[2] for x in estimates])[max_lkhs]
-        self.traces = np.array([x[3] for x in estimates])[max_lkhs]
-        self.param_dev = np.array([x[4] for x in estimates])[max_lkhs]
+        self.magnitudes =  np.array(estimates[max_lkhs][1])
+        self.parameters = np.array(estimates[max_lkhs][2])
+        self.traces = np.array(estimates[max_lkhs][3])
+        self.param_dev = np.array(estimates[max_lkhs][4])
         
         self.level_dict = level_dict
         self.levels = levels

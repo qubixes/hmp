@@ -131,7 +131,7 @@ class FixedEventModel(BaseModel):
             f"{self.n_events} events do not fit given the minimum duration of {min(trial_data.durations)}"
             " and a location of {self.location}"
         )
-        self.n_dims = trial_data.cross_corr.shape[1]
+        self.n_dims = trial_data.n_dims
 
         if self.starting_points > 1 and self.max_scale is None:
             raise ValueError(
@@ -675,7 +675,7 @@ class FixedEventModel(BaseModel):
         ends = trial_data.ends[subset_epochs]
         max_duration = np.max(durations)
         gains = np.zeros((trial_data.n_samples, n_events), dtype=np.float64)
-        for i in range(trial_data.cross_corr.shape[1]):
+        for i in range(trial_data.n_dims):
             # computes the gains, i.e. congruence between the pattern shape
             # and the data given the magnitudes of the sensors
             gains = (

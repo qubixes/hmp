@@ -25,6 +25,7 @@ class TrialData():
     ends: Any
     n_trials: int
     n_samples: int
+    n_dims: int
     cross_corr: Any
     trial_coords: Any
 
@@ -72,7 +73,7 @@ class TrialData():
             .coords
         )
         return cls(named_durations=named_durations, coords=coords, starts=starts, ends=ends,
-                   n_trials=n_trials, n_samples=n_samples, cross_corr=cross_corr,
+                   n_trials=n_trials, n_samples=n_samples, n_dims=n_dims, cross_corr=cross_corr,
                    trial_coords=trial_coords)
 
     @cached_property

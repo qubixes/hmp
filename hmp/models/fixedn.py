@@ -310,7 +310,7 @@ class FixedEventModel(BaseModel):
                 trial_data, self.level_dict
             )
         likelihoods, xreventprobs = self._distribute_levels(
-            trial_data, self.magnitudes, self.parameters, \
+            trial_data, self.magnitudes, self.parameters,
             self.mags_map, self.pars_map, levels, False
         )
         return likelihoods, xreventprobs

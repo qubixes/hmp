@@ -909,7 +909,8 @@ def event_times(
         only event dimension if mean = True contains nans for missing stages.
     """
     assert not (mean and errorbars is not None), "Only one of mean and errorbars can be set."
-    rts = estimates.rts
+    tstep = 1000 / estimates.sfreq    
+    rts = (np.argmax(np.cumsum(estimates.isel(event=-1).values, axis=1),axis=1)+1) * tstep
     if estimate_method is None:
         estimate_method = "max"
     event_shift = 0
@@ -938,7 +939,7 @@ def event_times(
         for x, e in np.argwhere(times_n_events == -event_shift):
             times[x, :, e] = np.nan
     if as_time:
-        times = times * 1000 / estimates.sfreq
+        times = times * tstep 
     if duration:
         fill_value = 0
     if fill_value is not None:

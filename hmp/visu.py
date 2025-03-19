@@ -118,7 +118,7 @@ def plot_topo_timecourse(
     from mne import Info
     from mne.viz import plot_brain_colorbar, plot_topomap
 
-    sfreq = estimates.sfreq
+    sfreq = epoch_data.sfreq
     level_plot = False
     estimates = estimates.copy()
     epoch_data = epoch_data.copy()
@@ -179,7 +179,7 @@ def plot_topo_timecourse(
 
     # if not times specified, plot average RT
     if times_to_display is None:
-        times_to_display = np.mean(estimates.rts)
+        times_to_display = np.mean(epoch_data.rt)
 
     if xlabel is None:
         if as_time:
@@ -194,7 +194,7 @@ def plot_topo_timecourse(
         event_color = event_lines
 
     # if estimates is an fitted HMP instance, calculate topos and times
-    assert "event" in estimates
+    assert "event" in estimates.dims
     if ydim is None:
         if (
             "n_events" in estimates.dims and estimates.n_events.count() > 1

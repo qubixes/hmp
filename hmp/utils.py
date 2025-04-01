@@ -986,7 +986,6 @@ def event_times(
 def event_topo(
     epoch_data,
     estimated,
-    extra_dim=None,
     mean=True,
     peak=True,
     estimate_method="max",
@@ -1000,8 +999,6 @@ def event_topo(
             Epoched data
         estimated: xr.Dataset
             estimated model parameters and event probabilities
-        extra_dim: str
-            if True the topography is computed in the extra dimension
         mean: bool
             if True mean will be computed instead of single-trial channel activities
         peak : bool
@@ -1040,100 +1037,49 @@ def event_topo(
     if not peak:
         normed_template = template / np.sum(template)
 
-    if not extra_dim or extra_dim == "levels":  # also in the level case, only one fit per trial
-        if estimate_method == "max":
-            times = estimated.argmax("samples")  # Most likely event location
-        else:
-            times = np.round(xr.dot(estimated, estimated.samples, dims="samples"))
-
-        event_values = np.zeros((n_channels, n_trials, n_events))
-        for ev in range(n_events):
-            for tr in range(n_trials):
-                samp = int(times.values[tr, ev])
-                if peak:
-                    event_values[:, tr, ev] = epoch_data.values[:, samp, tr]
-                else:
-                    vals = epoch_data.values[:, samp : samp + template // 2, tr]
-                    event_values[:, tr, ev] = np.dot(vals, normed_template[: vals.shape[1]])
-
-        event_values = xr.DataArray(
-            event_values,
-            dims=[
-                "channels",
-                "trial_x_participant",
-                "event",
-            ],
-            coords={
-                "trial_x_participant": estimated.trial_x_participant,
-                "event": estimated.event,
-                "channels": epoch_data.channels,
-            },
-        )
-        event_values = event_values.transpose(
-            "trial_x_participant", "event", "channels"
-        )  # to maintain previous behavior
-
-        if not extra_dim:
-            # set to nan if stage missing
-            times = times.mean("trial_x_participant").values
-            for e in np.argwhere(times == 0):
-                event_values[:, e, :] = np.nan
-
-        if extra_dim == "levels":
-            event_values = event_values.assign_coords(
-                levels=("trial_x_participant", times.levels.data)
-            )
-
-            # set to nan if stage missing
-            times_avg = times.groupby("levels").mean("trial_x_participant").values
-            for c, e in np.argwhere(times_avg == 0):
-                trials = (np.argwhere(times.levels.values == c)).flatten()
-                event_values[trials, e, :] = np.nan
-            times = times_avg
-
-    elif extra_dim == "n_events":  # here we need values per fit
-        n_dim = estimated[extra_dim].count().values
-        event_values = np.zeros((n_dim, n_channels, n_trials, n_events)) * np.nan
-        for x in range(n_dim):
-            if estimate_method == "max":
-                times = estimated[x].argmax("samples")
-            else:
-                times = np.round(xr.dot(estimated[x], estimated.samples, dims="samples"))
-            for ev in range(n_events):
-                for tr in range(n_trials):
-                    samp = int(times.values[tr, ev])
-                    if peak:
-                        event_values[x, :, tr, ev] = epoch_data.values[:, samp, tr]
-                    else:
-                        vals = epoch_data.values[:, samp : samp + template // 2, tr]
-                        event_values[x, :, tr, ev] = np.dot(vals, normed_template[: vals.shape[1]])
-
-            # set to nan if missing
-            times = times.mean("trial_x_participant").values
-            for e in np.argwhere(times == 0):
-                event_values[x, :, :, e] = np.nan
-
-        event_values = xr.DataArray(
-            event_values,
-            dims=[extra_dim, "channels", "trial_x_participant", "event"],
-            coords={
-                extra_dim: estimated[extra_dim],
-                "trial_x_participant": estimated.trial_x_participant,
-                "event": estimated.event,
-                "channels": epoch_data.channels,
-            },
-        )
-        event_values = event_values.transpose(
-            extra_dim, "trial_x_participant", "event", "channels"
-        )  # to maintain previous behavior
+    if estimate_method == "max":
+        times = estimated.argmax("samples")  # Most likely event location
     else:
-        print("Unknown extra dimension")
+        times = np.round(xr.dot(estimated, estimated.samples, dims="samples"))
+
+    event_values = np.zeros((n_channels, n_trials, n_events))
+    for ev in range(n_events):
+        for tr in range(n_trials):
+            samp = int(times.values[tr, ev])
+            if peak:
+                event_values[:, tr, ev] = epoch_data.values[:, samp, tr]
+            else:
+                vals = epoch_data.values[:, samp : samp + template // 2, tr]
+                event_values[:, tr, ev] = np.dot(vals, normed_template[: vals.shape[1]])
+
+    event_values = xr.DataArray(
+        event_values,
+        dims=[
+            "channels",
+            "trial_x_participant",
+            "event",
+        ],
+        coords={
+            "trial_x_participant": estimated.trial_x_participant,
+            "event": estimated.event,
+            "channels": epoch_data.channels,
+        },
+    )
+
+    event_values = event_values.assign_coords(
+        levels=("trial_x_participant", times.levels.data)
+    )
+
+    # set to nan if stage missing
+    times_avg = times.groupby("levels").mean("trial_x_participant").values
+    for c, e in np.argwhere(times_avg == 0):
+        trials = (np.argwhere(times.levels.values == c)).flatten()
+        event_values[trials, e, :] = np.nan
+    times = times_avg
+
 
     if mean:
-        if extra_dim == "levels":  # calculate mean within level trials
-            return event_values.groupby("levels").mean("trial_x_participant")
-        else:
-            return event_values.mean("trial_x_participant")
+        return event_values.groupby("levels").mean("trial_x_participant")
     else:
         return event_values
 

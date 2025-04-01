@@ -867,7 +867,6 @@ def event_times(
     fill_value=None,
     mean=False,
     add_rt=False,
-    extra_dim=None,
     as_time=False,
     errorbars=None,
     center_measure="mean",
@@ -888,8 +887,6 @@ def event_times(
         Note that mean and errorbars cannot both be true.
     add_rt : bool
         whether to append the last stage up to the RT
-    extra_dim : str
-        if string the times are averaged within that dimension
     as_time : bool
         if true, return time (ms) instead of samples
     errorbars : str
@@ -920,24 +917,13 @@ def event_times(
     else:
         times = xr.dot(eventprobs, eventprobs.samples, dims="samples") - event_shift
     times = times.astype("float32")  # needed for eventual addition of NANs
-    # in case there is a single model, but there are empty stages at the end
-    # this happens with selected model from backward estimation
-    if "n_events" in times.coords and len(times.shape) == 2:
-        tmp = times.mean("trial_x_participant").values
-        if tmp[-1] == -event_shift:
-            filled_stages = np.where(tmp != -event_shift)[0]
-            times = times[:, filled_stages]
-    # set to nan if stage missing
-    if extra_dim == "levels":
-        times_level = (
-            times.groupby("levels").mean("trial_x_participant").values
-        )  # take average to make sure it's not just 0 on the trial-level
-        for c, e in np.argwhere(times_level == -event_shift):
-            times[times["levels"] == c, e] = np.nan
-    elif extra_dim == "n_events":
-        times_n_events = times.mean("trial_x_participant").values
-        for x, e in np.argwhere(times_n_events == -event_shift):
-            times[x, :, e] = np.nan
+
+    times_level = (
+        times.groupby("levels").mean("trial_x_participant").values
+    )  # take average to make sure it's not just 0 on the trial-level
+    for c, e in np.argwhere(times_level == -event_shift):
+        times[times["levels"] == c, e] = np.nan
+
     if as_time:
         times = times * tstep 
     if duration:
@@ -952,116 +938,46 @@ def event_times(
     if add_rt:
         if as_time:
             rts = rts * 1000 / estimates.sfreq
+        rts = xr.DataArray(rts)
         rts = rts.assign_coords(event=int(times.event.max().values + 1))
         rts = rts.expand_dims(dim="event")
         times = xr.concat([times, rts], dim="event")
-        if extra_dim == "n_events":  # move rts inside the nans of the missing stages
-            for e in times["n_events"].values:
-                tmp = np.squeeze(
-                    times.isel(n_events=times["n_events"] == e).values
-                )  # seems overly complicated, but is necessary
-                # identify first nan column
-                first_nan = np.where(np.isnan(np.mean(tmp, axis=0)))[0]
-                if len(first_nan) > 0:
-                    first_nan = first_nan[0]
-                    tmp[:, first_nan] = tmp[:, -1]
-                    tmp[:, -1] = np.nan
-                    times[times["n_events"] == e, :, :] = tmp
     if duration:  # taking into account missing events, hence the ugly code
         times = times.rename({"event": "stage"})
-        if not extra_dim:
-            times = times.diff(dim="stage")
-        elif extra_dim == "levels":  # by level, ignore missing events
-            for c in np.unique(times["levels"].values):
-                tmp = times.isel(trial_x_participant=estimates["levels"] == c).values
-                # identify nan columns == missing events
-                missing_evts = np.where(np.isnan(np.mean(tmp, axis=0)))[0]
-                tmp = np.diff(
-                    np.delete(tmp, missing_evts, axis=1)
-                )  # remove 0 columns, calc difference
-                # insert nan columns (to maintain shape),
-                for missing in missing_evts:
-                    tmp = np.insert(tmp, missing - 1, np.nan, axis=1)
-                # add extra column to match shape
-                tmp = np.hstack((tmp, np.tile(np.nan, (tmp.shape[0], 1))))
-                times[estimates["levels"] == c, :] = tmp
-            times = times[:, :-1]  # remove extra column
-        elif extra_dim == "n_events":
-            for e in times["n_events"].values:
-                tmp = np.squeeze(
-                    times.isel(n_events=times["n_events"] == e).values
-                )  # seems overly complicated, but is necessary
-                # identify nan columns == missing events
-                missing_evts = np.where(np.isnan(np.mean(tmp, axis=0)))[0]
-                tmp = np.diff(
-                    np.delete(tmp, missing_evts, axis=1)
-                )  # remove 0 columns, calc difference
-                # insert nan columns (to maintain shape), in contrast to above,
-                # here add columns at the end, as no actually 'missing' events
-                tmp = np.hstack((tmp, np.tile(np.nan, (tmp.shape[0], len(missing_evts)))))
-                # add extra column to match shape
-                tmp = np.hstack((tmp, np.tile(np.nan, (tmp.shape[0], 1))))
-                times[times["n_events"] == e, :, :] = tmp
-            times = times[:, :, :-1]  # remove extra column
+        for c in np.unique(times["levels"].values):
+            tmp = times.isel(trial_x_participant=estimates["levels"] == c).values
+            # identify nan columns == missing events
+            missing_evts = np.where(np.isnan(np.mean(tmp, axis=0)))[0]
+            tmp = np.diff(
+                np.delete(tmp, missing_evts, axis=1)
+            )  # remove 0 columns, calc difference
+            # insert nan columns (to maintain shape),
+            for missing in missing_evts:
+                tmp = np.insert(tmp, missing - 1, np.nan, axis=1)
+            # add extra column to match shape
+            tmp = np.hstack((tmp, np.tile(np.nan, (tmp.shape[0], 1))))
+            times[estimates["levels"] == c, :] = tmp
+        times = times[:, :-1]  # remove extra column
 
     if mean:
-        if extra_dim == "levels":  # calculate mean only in trials of specific level
-            if center_measure == "mean":
-                times = times.groupby("levels").mean("trial_x_participant")
-            elif center_measure == "median":
-                times = times.groupby("levels").mean("trial_x_participant")
-            else:
-                print("center measure not recognized")
-        elif center_measure == "mean":
-            times = times.mean("trial_x_participant")
+        if center_measure == "mean":
+            times = times.groupby("levels").mean("trial_x_participant")
         elif center_measure == "median":
-            times = times.median("trial_x_participant")
+            times = times.groupby("levels").mean("trial_x_participant")
         else:
             print("center measure not recognized")
 
     elif errorbars:
-        if extra_dim == "levels":
-            errorbars_model = np.zeros((len(np.unique(times["levels"])), 2, times.shape[1]))
-            if errorbars == "std":
-                std_errs = times.groupby("levels").reduce(np.std, dim="trial_x_participant").values
-                for c in np.unique(times["levels"]):
-                    errorbars_model[c, :, :] = np.tile(std_errs[c, :], (2, 1))
-            else:
-                raise ValueError(
-                    "Unknown error bars, 'std' is for now the only accepted argument in the "
-                    "multilevel models"
-                )
-        elif extra_dim == "n_events":
-            errorbars_model = np.zeros((times.shape[0], 2, times.shape[2]))
-            if errorbars == "std":
-                std_errs = times.reduce(np.std, dim="trial_x_participant").values
-                for e in np.unique(times["n_events"]):
-                    errorbars_model[times["n_events"] == e, :, :] = np.tile(
-                        std_errs[times["n_events"] == e, :], (2, 1)
-                    )
-            elif errorbars == "se":
-                se_errs = (
-                    times.groupby("participant")
-                    .mean("trial_x_participant")
-                    .groupby("n_events")
-                    .reduce(sem, dim="participant", axis=0)
-                    .values
-                )
-                for c in np.unique(times["levels"]):
-                    errorbars_model[c, :, :] = np.tile(se_errs[c, :], (2, 1))
-            else:
-                raise ValueError("Unknown error bars, 'std' or 'se'")
-        elif errorbars == "std":
-            errorbars_model = np.tile(
-                times.reduce(np.std, dim="trial_x_participant").values, (2, 1)
-            )
-        elif errorbars == "se":
-            errorbars_model = np.tile(
-                times.groupby("participant")
-                .mean("trial_x_participant")
-                .reduce(sem, dim="participant")
-                .values,
-                (2, 1),
+
+        errorbars_model = np.zeros((len(np.unique(times["levels"])), 2, times.shape[1]))
+        if errorbars == "std":
+            std_errs = times.groupby("levels").reduce(np.std, dim="trial_x_participant").values
+            for c in np.unique(times["levels"]):
+                errorbars_model[c, :, :] = np.tile(std_errs[c, :], (2, 1))
+        else:
+            raise ValueError(
+                "Unknown error bars, 'std' is for now the only accepted argument in the "
+                "multilevel models"
             )
         times = errorbars_model
     return times

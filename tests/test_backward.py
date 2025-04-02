@@ -6,6 +6,7 @@ import pandas as pd
 from pathlib import Path
 import gc
 from pytest import mark
+import xarray as xr
 
 import hmp
 from hmp import simulations
@@ -61,8 +62,8 @@ def test_fixed_simple():
     estimates = model.transform(trial_data_b)
 
     # testing recovery of attributes
-    model.xrlikelihoods
-    model.xrmags
-    model.xrparams
-    model.param_dev
-    model.xrtraces
+    assert isinstance(model.xrlikelihoods, xr.DataArray)
+    assert isinstance(model.xrmags, xr.DataArray)
+    assert isinstance(model.xrparams, xr.DataArray)
+    assert isinstance(model.xrparam_dev, xr.DataArray)
+    assert isinstance(model.xrtraces, xr.DataArray)

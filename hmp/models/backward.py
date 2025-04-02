@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from pandas import MultiIndex
+import pandas as pd
 from scipy.signal import correlate
 from scipy.stats import norm as norm_pval
 
@@ -74,7 +75,6 @@ class BackwardEstimationModel(BaseModel):
         """
         if max_events is None and base_fit is None:
             max_events = self.compute_max_events(trial_data)
-        print("MAX_EVENTS", max_events)
         if not base_fit:
             if max_starting_points > 0:
                 print(
@@ -82,30 +82,31 @@ class BackwardEstimationModel(BaseModel):
                     "pre-defined starting point and {max_starting_points - 1} starting points"
                 )
             fixed_n_model = self.get_fixed_model(n_events=max_events)
-            event_loo_results = fixed_n_model.fit_transform(trial_data, verbose=False)
+            loglikelihood, eventprobs = fixed_n_model.fit_transform(trial_data, verbose=False)
         else:
-            event_loo_results = [base_fit]
-        max_events = event_loo_results[0].event.max().values + 1
+            loglikelihood, eventprobs = base_fit
+        max_events = eventprobs.event.max().values + 1
+        self.submodels[max_events] = fixed_n_model
 
         for n_events in np.arange(max_events - 1, min_events, -1):
             fixed_n_model = self.get_fixed_model(n_events)
             # only take previous model forward when it's actually fitting ok
-            if event_loo_results[-1].loglikelihood.values != -np.inf:
+            if loglikelihood[-1] != -np.inf:
                 print(f"Estimating all solutions for {n_events} events")
 
-                pars_prev = event_loo_results[-1].dropna("stage").parameters.values
-                mags_prev = event_loo_results[-1].dropna("event").magnitudes.values
+                pars_prev = self.submodels[n_events+1].xrparams.dropna("stage").values
+                mags_prev = self.submodels[n_events+1].xrmags.dropna("event").values
 
                 events_temp, pars_temp = [], []
 
                 for event in np.arange(n_events + 1):  # creating all possible solutions
-                    events_temp.append(mags_prev[np.arange(n_events + 1) != event,])
+                    events_temp.append(mags_prev[:, np.arange(n_events + 1) != event,])
 
                     temp_pars = np.copy(pars_prev)
-                    temp_pars[event, 1] = (
-                        temp_pars[event, 1] + temp_pars[event + 1, 1]
+                    temp_pars[:, event, 1] = (
+                        temp_pars[:, event, 1] + temp_pars[:, event + 1, 1]
                     )  # combine two stages into one
-                    temp_pars = np.delete(temp_pars, event + 1, axis=0)
+                    temp_pars = np.delete(temp_pars, event + 1, axis=1)
                     pars_temp.append(temp_pars)
 
                 if cpus == 1:
@@ -114,8 +115,6 @@ class BackwardEstimationModel(BaseModel):
                                 trial_data,
                                 magnitudes=events_temp[i],
                                 parameters=pars_temp[i],
-                                tolerance=tolerance,
-                                max_iteration=max_iteration,
                                 verbose=False,
                             )
                 else:
@@ -144,6 +143,7 @@ class BackwardEstimationModel(BaseModel):
                     f"Previous model did not fit well. Estimating a neutral {n_events} event model."
                 )
             self.submodels[n_events] = fixed_n_model
+        self._fitted = True
                 # event_loo_results.append(
                 #     self.get_fixed_model(n_events)
                 # )
@@ -161,8 +161,41 @@ class BackwardEstimationModel(BaseModel):
     def transform(self, trial_data):
         if len(self.submodels) == 0:
             raise ValueError("Model has not been (succesfully) fitted yet, no fixed models.")
-        return xr.concat([m.transform(trial_data) for m in self.submodels],
-                         dim="n_events", coords=list(self.submodels))
+        likelihoods = []
+        event_probs = []
+        for n_events, fixed_n_model in self.submodels.items():
+            lkh, prob = fixed_n_model.transform(trial_data)
+            likelihoods.append(lkh)
+            event_probs.append(prob)
+        xr_eventprobs = xr.concat(event_probs, dim=pd.Index(list(self.submodels), name="n_events"))
+        # xr_eventprobs.coords["n_events"] = list(self.submodels)
+        return likelihoods, xr_eventprobs
+                # xr.concat(event_probs, dim="n_events", coords=list(self.submodels)))
+        # return xr.concat([m.transform(trial_data) for m in self.submodels.values()],
+                        #  dim="n_events", coords=list(self.submodels))
+    def _concatted_attr(self, attr_name):
+        return xr.concat([getattr(model, attr_name) for model in self.submodels.values()],
+                         dim=pd.Index(list(self.submodels), name="n_events"))
+
+    def __getattribute__(self, attr):
+        property_list = {
+            "xrtraces": "get traces",
+            "xrlikelihoods": "get likelihoods",
+            "xrparam_dev": "get dev params",
+            "xrmags": "get xrmags",
+            "xrparams": "get xrparams"
+        }
+        if attr in property_list:
+            self._check_fitted(property_list[attr])
+            return self._concatted_attr(attr)
+        return super().__getattribute__(attr)
+    # @property
+    # def xrtraces(self):
+    #     self._check_fitted("get traces")
+    #     return self._concatted_attr("xrtraces")
+
+    # @property
+    # def 
 
 
     def get_fixed_model(self, n_events):

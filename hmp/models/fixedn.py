@@ -40,7 +40,6 @@ class FixedEventModel(BaseModel):
         self.max_iteration = max_iteration
         self.min_iteration = min_iteration
         self.starting_points = starting_points
-        self._fitted = False
         self.max_scale = max_scale
         self.level_dict = {}
         self.pars_map = np.zeros((1,self.n_events+1))
@@ -297,7 +296,7 @@ class FixedEventModel(BaseModel):
         self.parameters = np.array(estimates[max_lkhs][2])
         self.traces = np.array(estimates[max_lkhs][3])
         self.param_dev = np.array(estimates[max_lkhs][4])
-        
+
         self.level_dict = level_dict
         self.levels = levels
         self.mags_map = mags_map
@@ -316,9 +315,6 @@ class FixedEventModel(BaseModel):
         return likelihoods, xreventprobs
 
 
-    def _check_fitted(self, op):
-        if not self._fitted:
-            raise ValueError(f"Cannot {op}, because the model has not been fitted yet.")
 
     @property
     def xrtraces(self):
@@ -343,7 +339,7 @@ class FixedEventModel(BaseModel):
         self._check_fitted("get dev params")
         return xr.DataArray(
                 self.param_dev,
-                dims=( "em_iteration", "level", "stage", "parameter"),
+                dims=("em_iteration", "level", "stage", "parameter"),
                 name="param_dev",
                 coords=[
                     range(self.param_dev.shape[0]),
@@ -372,7 +368,7 @@ class FixedEventModel(BaseModel):
         self._check_fitted("get xrmags")
         return xr.DataArray(
                 self.magnitudes,
-                dims=( "level", "event", "component"),
+                dims=("level", "event", "component"),
                 name="magnitudes",
                 coords={
                     "level": range(self.magnitudes.shape[0]),

@@ -864,7 +864,6 @@ def transform_data(
 def event_times(
     estimates,
     duration=False,
-    fill_value=None,
     mean=False,
     add_rt=False,
     as_time=False,
@@ -880,8 +879,6 @@ def event_times(
         Estimated instance of an HMP model
     duration : bool
         Whether to compute peak location (False) or inter-peak duration (True)
-    fill_value : float | ndarray
-        What value to fill for the first peak/duration.
     mean : bool
         Whether to compute the mean (True) or return the single trial estimates
         Note that mean and errorbars cannot both be true.
@@ -927,10 +924,8 @@ def event_times(
     if as_time:
         times = times * tstep 
     if duration:
-        fill_value = 0
-    if fill_value is not None:
         added = xr.DataArray(
-            np.repeat(fill_value, len(times.trial_x_participant))[np.newaxis, :],
+            np.repeat(0, len(times.trial_x_participant))[np.newaxis, :],
             coords={"event": [0], "trial_x_participant": times.trial_x_participant},
         )
         times = times.assign_coords(event=times.event + 1)

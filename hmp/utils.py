@@ -904,7 +904,6 @@ def event_times(
     """
     assert not (mean and errorbars is not None), "Only one of mean and errorbars can be set."
     tstep = 1000 / estimates.sfreq    
-    rts = (np.argmax(np.cumsum(estimates.isel(event=-1).values, axis=1),axis=1)+1) * tstep
     if estimate_method is None:
         estimate_method = "max"
     event_shift = 0
@@ -931,6 +930,7 @@ def event_times(
         times = times.assign_coords(event=times.event + 1)
         times = times.combine_first(added)
     if add_rt:
+        rts = (np.argmax(np.cumsum(estimates.isel(event=-1).values, axis=1),axis=1)+1) * tstep
         if as_time:
             rts = rts * 1000 / estimates.sfreq
         rts = xr.DataArray(rts)

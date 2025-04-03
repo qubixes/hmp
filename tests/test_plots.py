@@ -5,7 +5,6 @@ import pandas as pd
 from pathlib import Path
 import gc
 from pytest import mark
-import matplotlib.pyplot as plt
 
 
 import hmp
@@ -50,4 +49,3 @@ def test_plot():
     plot_topo_timecourse(epoch_data, estimates_comb, positions, as_time=True, colorbar=False, )
     plot_topo_timecourse(epoch_data, estimates_b, positions, as_time=True, 
                        max_time=500, colorbar=False, )
-    plt.show()

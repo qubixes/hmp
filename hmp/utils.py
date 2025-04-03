@@ -918,7 +918,7 @@ def event_times(
     if as_time:
         times = times * tstep 
     if add_rt:
-        rts = (np.argmax(np.cumsum(estimates.isel(event=-1).values, axis=1),axis=1)+1) * tstep
+        rts = estimates.cumsum('samples').argmax('samples').max('event')+1 * tstep
         if as_time:
             rts = rts * 1000 / estimates.sfreq
         rts = xr.DataArray(rts)
@@ -950,7 +950,6 @@ def event_times(
 
     if mean:
         times = times.groupby("levels").mean("trial_x_participant")
-
     elif errorbars:
         errorbars_model = np.zeros((len(np.unique(times["levels"])), 2, times.shape[1]))
         if errorbars == "std":

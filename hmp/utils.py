@@ -910,7 +910,6 @@ def event_times(
     else:
         times = xr.dot(eventprobs, eventprobs.samples, dims="samples") - event_shift
     times = times.astype("float32")  # needed for eventual addition of NANs
-
     times_level = (
         times.groupby("levels").mean("trial_x_participant").values
     )  # take average to make sure it's not just 0 on the trial-level
@@ -934,7 +933,6 @@ def event_times(
         )
         times = times.assign_coords(event=times.event + 1)
         times = times.combine_first(added)
-        times = times.rename({"event": "stage"})
         for c in np.unique(times["levels"].values):
             tmp = times.isel(trial_x_participant=estimates["levels"] == c).values
             # identify nan columns == missing events

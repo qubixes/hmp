@@ -1037,20 +1037,19 @@ def event_topo(
     if not peak:
         normed_template = template / np.sum(template)
 
-    if estimate_method == "max":
-        times = estimated.argmax("samples")  # Most likely event location
-    else:
-        times = np.round(xr.dot(estimated, estimated.samples, dims="samples"))
-
-    event_values = np.zeros((n_channels, n_trials, n_events))
+    times = event_times(estimated, mean=False, estimate_method=estimate_method,)
+    
+    event_values = np.zeros((n_channels, n_trials, n_events))*np.nan
     for ev in range(n_events):
         for tr in range(n_trials):
-            samp = int(times.values[tr, ev])
-            if peak:
-                event_values[:, tr, ev] = epoch_data.values[:, samp, tr]
-            else:
-                vals = epoch_data.values[:, samp : samp + template // 2, tr]
-                event_values[:, tr, ev] = np.dot(vals, normed_template[: vals.shape[1]])
+            # If time is nan, means that no event was estimated for that trial/level
+            if np.isfinite(times.values[tr, ev]):
+                samp = int(times.values[tr, ev])
+                if peak:
+                    event_values[:, tr, ev] = epoch_data.values[:, samp, tr]
+                else:
+                    vals = epoch_data.values[:, samp : samp + template // 2, tr]
+                    event_values[:, tr, ev] = np.dot(vals, normed_template[: vals.shape[1]])
 
     event_values = xr.DataArray(
         event_values,

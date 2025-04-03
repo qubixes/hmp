@@ -922,13 +922,6 @@ def event_times(
 
     if as_time:
         times = times * tstep 
-    if duration:
-        added = xr.DataArray(
-            np.repeat(0, len(times.trial_x_participant))[np.newaxis, :],
-            coords={"event": [0], "trial_x_participant": times.trial_x_participant},
-        )
-        times = times.assign_coords(event=times.event + 1)
-        times = times.combine_first(added)
     if add_rt:
         rts = (np.argmax(np.cumsum(estimates.isel(event=-1).values, axis=1),axis=1)+1) * tstep
         if as_time:
@@ -937,7 +930,14 @@ def event_times(
         rts = rts.assign_coords(event=int(times.event.max().values + 1))
         rts = rts.expand_dims(dim="event")
         times = xr.concat([times, rts], dim="event")
+    
     if duration:  # taking into account missing events, hence the ugly code
+        added = xr.DataArray(
+            np.repeat(0, len(times.trial_x_participant))[np.newaxis, :],
+            coords={"event": [0], "trial_x_participant": times.trial_x_participant},
+        )
+        times = times.assign_coords(event=times.event + 1)
+        times = times.combine_first(added)
         times = times.rename({"event": "stage"})
         for c in np.unique(times["levels"].values):
             tmp = times.isel(trial_x_participant=estimates["levels"] == c).values

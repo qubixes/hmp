@@ -868,7 +868,6 @@ def event_times(
     add_rt=False,
     as_time=False,
     errorbars=None,
-    center_measure="mean",
     estimate_method="max",
 ):
     """Compute the likeliest peak times for each event.
@@ -890,8 +889,6 @@ def event_times(
         calculate 95% confidence interval ('ci'), standard deviation ('std'),
         standard error ('se') on the times or durations, or None.
         Note that mean and errorbars cannot both be true.
-    center_measure : string
-        mean (default) or median, used to calculate the measure within participant if mean is True
     estimate_method : string
         'max' or 'mean', either take the max probability of each event on each trial, or the
         weighted average.
@@ -919,7 +916,6 @@ def event_times(
     )  # take average to make sure it's not just 0 on the trial-level
     for c, e in np.argwhere(times_level == -event_shift):
         times[times["levels"] == c, e] = np.nan
-
     if as_time:
         times = times * tstep 
     if add_rt:
@@ -955,15 +951,9 @@ def event_times(
         times = times[:, :-1]  # remove extra column
 
     if mean:
-        if center_measure == "mean":
-            times = times.groupby("levels").mean("trial_x_participant")
-        elif center_measure == "median":
-            times = times.groupby("levels").mean("trial_x_participant")
-        else:
-            print("center measure not recognized")
+        times = times.groupby("levels").mean("trial_x_participant")
 
     elif errorbars:
-
         errorbars_model = np.zeros((len(np.unique(times["levels"])), 2, times.shape[1]))
         if errorbars == "std":
             std_errs = times.groupby("levels").reduce(np.std, dim="trial_x_participant").values

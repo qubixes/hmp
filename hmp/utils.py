@@ -1052,18 +1052,9 @@ def event_topo(
         levels=("trial_x_participant", times.levels.data)
     )
 
-    # set to nan if stage missing
-    times_avg = times.groupby("levels").mean("trial_x_participant").values
-    for c, e in np.argwhere(times_avg == 0):
-        trials = (np.argwhere(times.levels.values == c)).flatten()
-        event_values[trials, e, :] = np.nan
-    times = times_avg
-
-
     if mean:
-        return event_values.groupby("levels").mean("trial_x_participant")
-    else:
-        return event_values
+        event_values = event_values.groupby("levels").mean("trial_x_participant")
+    return event_values
 
 
 def save(data, filename):

@@ -1,17 +1,12 @@
 ## Importing these packages is specific for this simulation case
-import os
+from pathlib import Path
 
 import numpy as np
-import pandas as pd
-from pathlib import Path
-import gc
-from pytest import mark
 import xarray as xr
 
 import hmp
 from hmp import simulations
-from hmp.models import BackwardEstimationModel
-from hmp.models import FixedEventModel
+from hmp.models import BackwardEstimationModel, FixedEventModel
 from hmp.models.base import EventProperties
 from hmp.trialdata import TrialData
 
@@ -48,7 +43,7 @@ def test_fixed_simple():
     data_b = hmp.utils.participant_selection(hmp_data, 'b')
     event_properties = EventProperties.create_expected(sfreq=data_b.sfreq)
     trial_data_b = TrialData.from_standard_data(data=data_b, template=event_properties.template)
-    
+
     true_model = FixedEventModel(event_properties, n_events=n_events)
     # Recover generating parameters
     sim_source_times, true_pars, true_magnitudes, _ = \
@@ -68,7 +63,7 @@ def test_fixed_simple():
 
     # testing if bacward identifies the 3 real events
     assert np.isclose(model.submodels[3].magnitudes, true_model.magnitudes, atol=1).all()
-    
+
     # testing recovery of attributes
     assert isinstance(model.xrlikelihoods, xr.DataArray)
     assert isinstance(model.xrmags, xr.DataArray)

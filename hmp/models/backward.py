@@ -107,45 +107,11 @@ class BackwardEstimationModel(BaseModel):
                             parameters=np.array(pars_temp),
                             verbose=False,
                         )
-                # if cpus == 1:
-                #     for i in range(len(events_temp)):
-                            
-                # else:
-                #     inputs = zip(
-                #         itertools.repeat(trial_data),
-                #         events_temp,  # magnitudes
-                #         pars_temp,  # parameters
-                #         itertools.repeat(None),  # parameters_to_fix
-                #         itertools.repeat(None),  # magnitudes_to_fix
-                #         itertools.repeat(False),  # verbose
-                #         itertools.repeat(1),  # cpus
-                #     )
-                #     with mp.Pool(processes=cpus) as pool:
-                #         pool.starmap(fixed_n_model.fit, inputs)
 
-                # lkhs = [x.loglikelihood.values for x in event_loo_likelihood_temp]
-                # event_loo_results.append(event_loo_likelihood_temp[np.nanargmax(lkhs)])
-
-                # remove event_loo_likelihood
-                # del event_loo_likelihood_temp
-                # Force garbage collection
             gc.collect()
             self.submodels[n_events] = fixed_n_model
         self._fitted = True
-                # event_loo_results.append(
-                #     self.get_fixed_model(n_events)
-                # )
-    
-        # event_loo_results = xr.concat(event_loo_results, dim="n_events", fill_value=np.nan)
-        # event_loo_results = event_loo_results.assign_coords(
-        #     {"n_events": np.arange(max_events, min_events, -1)}
-        # )
-        # event_loo_results = event_loo_results.assign_attrs(method="backward")
-        # if "sp_parameters" in event_loo_results.attrs:
-        #     del event_loo_results.attrs["sp_parameters"]
-        #     del event_loo_results.attrs["sp_magnitudes"]
-        #     del event_loo_results.attrs["maximization"]
-        # return event_loo_results
+
     def transform(self, trial_data):
         if len(self.submodels) == 0:
             raise ValueError("Model has not been (succesfully) fitted yet, no fixed models.")

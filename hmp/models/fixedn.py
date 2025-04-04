@@ -126,17 +126,6 @@ class FixedEventModel(BaseModel):
                     "The fit_n() function needs to be provided with a number of expected transition"
                     " events"
                 )
-        assert self.n_events <= self.compute_max_events(trial_data), (
-            f"{self.n_events} events do not fit given the minimum duration of {min(trial_data.durations)}"
-            " and a location of {self.location}"
-        )
-        self.n_dims = trial_data.n_dims
-
-        if self.starting_points > 1 and self.max_scale is None:
-            raise ValueError(
-                    "If using multiple starting points, a maximum distance between events needs "
-                    " to be provided using the max_scale argument."
-                )
 
         if level_dict is None:
             level_dict = self.level_dict
@@ -178,6 +167,8 @@ class FixedEventModel(BaseModel):
             infos_to_store["magnitudes_to_fix"] = magnitudes_to_fix
 
         if parameters is None:
+            # If no parameters starting points are provided generate standard ones
+            # Or random ones if starting_points > 1
             parameters = (
                 np.zeros((n_levels, self.n_events + 1, 2)) * np.nan
             )  # by default nan for missing stages
@@ -194,19 +185,28 @@ class FixedEventModel(BaseModel):
                     ],
                     (n_stage_level, 1),
                 )
+            initial_p = parameters
+            parameters = [initial_p]
+            if self.starting_points > 1:
+                if self.max_scale is None:
+                    raise ValueError(
+                            "If using multiple starting points, a maximum distance between events needs "
+                            " to be provided using the max_scale argument."
+                        )
+                infos_to_store["starting_points"] = self.starting_points
+                for _ in np.arange(self.starting_points):
+                    proposal_p = (
+                        np.zeros((n_levels, self.n_events + 1, 2)) * np.nan
+                    )  # by default nan for missing stages
+                    for cur_level in range(n_levels):
+                        pars_level = np.where(pars_map[cur_level, :] >= 0)[0]
+                        n_stage_level = len(pars_level)
+                        proposal_p[cur_level, pars_level, :] = self.gen_random_stages(n_stage_level - 1)
+                        proposal_p[cur_level, parameters_to_fix, :] = initial_p[0, parameters_to_fix]
+                    parameters.append(proposal_p)
+                parameters = np.array(parameters)
         else:
             infos_to_store["sp_parameters"] = parameters
-            if len(np.shape(parameters)) == 2:  # broadcast provided parameters across levels
-                parameters = np.tile(parameters, (n_levels, 1, 1))
-            assert parameters.shape[1] == self.n_events + 1, (
-                f"Provided parameters ({parameters.shape[1]} should match number of "
-                f"stages {self.n_events + 1}"
-            )
-
-            # set params missing stages to nan to make it obvious in the results
-            if (pars_map < 0).any():
-                for cur_level in range(n_levels):
-                    parameters[cur_level, np.where(pars_map[cur_level, :] < 0)[0], :] = np.nan
 
         if magnitudes is None:
             # By defaults mags are initiated to 0
@@ -214,35 +214,10 @@ class FixedEventModel(BaseModel):
             if (mags_map < 0).any():  # set missing mags to nan
                 for cur_level in range(n_levels):
                     magnitudes[cur_level, np.where(mags_map[cur_level, :] < 0)[0], :] = np.nan
+            initial_m = magnitudes
+            magnitudes = np.tile(initial_m, (self.starting_points + 1, 1, 1, 1))
         else:
             infos_to_store["sp_magnitudes"] = magnitudes
-            if len(np.shape(magnitudes)) == 2:  # broadcast provided magnitudes across levels
-                magnitudes = np.tile(magnitudes, (n_levels, 1, 1))
-            assert magnitudes.shape[1] == self.n_events, (
-                "Provided magnitudes should match number of events in magnitudes map"
-            )
-
-            # set mags missing events to nan to make it obvious in the results
-            if (mags_map < 0).any():
-                for cur_level in range(n_levels):
-                    magnitudes[cur_level, np.where(mags_map[cur_level, :] < 0)[0], :] = np.nan
-        initial_p = parameters
-        initial_m = magnitudes
-        parameters = [initial_p]
-        magnitudes = np.tile(initial_m, (self.starting_points + 1, 1, 1, 1))
-        if self.starting_points > 1:
-            infos_to_store["starting_points"] = self.starting_points
-            for _ in np.arange(self.starting_points):
-                proposal_p = (
-                    np.zeros((n_levels, self.n_events + 1, 2)) * np.nan
-                )  # by default nan for missing stages
-                for cur_level in range(n_levels):
-                    pars_level = np.where(pars_map[cur_level, :] >= 0)[0]
-                    n_stage_level = len(pars_level)
-                    proposal_p[cur_level, pars_level, :] = self.gen_random_stages(n_stage_level - 1)
-                    proposal_p[cur_level, parameters_to_fix, :] = initial_p[0, parameters_to_fix]
-                parameters.append(proposal_p)
-            parameters = np.array(parameters)
 
         if cpus > 1:
             inputs = zip(

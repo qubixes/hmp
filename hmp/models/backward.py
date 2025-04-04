@@ -41,9 +41,6 @@ class BackwardEstimationModel(BaseModel):
         max_events=None,
         min_events=0,
         base_fit=None,
-        tolerance=1e-4,
-        maximization=True,
-        max_iteration=1e3,
         cpus=1,
     ):
         """Perform the backward estimation.
@@ -76,7 +73,8 @@ class BackwardEstimationModel(BaseModel):
                 f"Estimating all solutions for maximal number of events ({max_events})"
             )
             fixed_n_model = self.get_fixed_model(n_events=max_events, starting_points=1)
-            loglikelihood, eventprobs = fixed_n_model.fit_transform(trial_data, verbose=False)
+            loglikelihood, eventprobs = fixed_n_model.fit_transform(trial_data, verbose=False,
+                                                                    cpus=cpus)
         else:
             loglikelihood, eventprobs = base_fit
         max_events = eventprobs.event.max().values + 1
@@ -106,6 +104,7 @@ class BackwardEstimationModel(BaseModel):
                             magnitudes=np.array(events_temp),
                             parameters=np.array(pars_temp),
                             verbose=False,
+                            cpus=cpus
                         )
 
             gc.collect()
@@ -122,11 +121,8 @@ class BackwardEstimationModel(BaseModel):
             likelihoods.append(lkh)
             event_probs.append(prob)
         xr_eventprobs = xr.concat(event_probs, dim=pd.Index(list(self.submodels), name="n_events"))
-        # xr_eventprobs.coords["n_events"] = list(self.submodels)
         return likelihoods, xr_eventprobs
-                # xr.concat(event_probs, dim="n_events", coords=list(self.submodels)))
-        # return xr.concat([m.transform(trial_data) for m in self.submodels.values()],
-                        #  dim="n_events", coords=list(self.submodels))
+
     def _concatted_attr(self, attr_name):
         return xr.concat([getattr(model, attr_name) for model in self.submodels.values()],
                          dim=pd.Index(list(self.submodels), name="n_events"))
@@ -143,14 +139,6 @@ class BackwardEstimationModel(BaseModel):
             self._check_fitted(property_list[attr])
             return self._concatted_attr(attr)
         return super().__getattribute__(attr)
-    # @property
-    # def xrtraces(self):
-    #     self._check_fitted("get traces")
-    #     return self._concatted_attr("xrtraces")
-
-    # @property
-    # def 
-
 
     def get_fixed_model(self, n_events, starting_points):
         return FixedEventModel(

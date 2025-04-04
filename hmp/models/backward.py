@@ -41,7 +41,6 @@ class BackwardEstimationModel(BaseModel):
         max_events=None,
         min_events=0,
         base_fit=None,
-        max_starting_points=1,
         tolerance=1e-4,
         maximization=True,
         max_iteration=1e3,
@@ -63,9 +62,6 @@ class BackwardEstimationModel(BaseModel):
         base_fit : xarray
             To avoid re-estimating the model with maximum number of events it can be provided
             with this arguments, defaults to None
-        max_starting_points: int
-            how many random starting points iteration to try for the model estimating the maximal
-            number of events
         tolerance: float
             Tolerance applied to the expectation maximization in the EM() function
         maximization: bool
@@ -76,12 +72,10 @@ class BackwardEstimationModel(BaseModel):
         if max_events is None and base_fit is None:
             max_events = self.compute_max_events(trial_data)
         if not base_fit:
-            if max_starting_points > 0:
-                print(
-                    f"Estimating all solutions for maximal number of events ({max_events}) with 1 "
-                    "pre-defined starting point and {max_starting_points - 1} starting points"
-                )
-            fixed_n_model = self.get_fixed_model(n_events=max_events)
+            print(
+                f"Estimating all solutions for maximal number of events ({max_events})"
+            )
+            fixed_n_model = self.get_fixed_model(n_events=max_events, starting_points=1)
             loglikelihood, eventprobs = fixed_n_model.fit_transform(trial_data, verbose=False)
         else:
             loglikelihood, eventprobs = base_fit
@@ -89,46 +83,45 @@ class BackwardEstimationModel(BaseModel):
         self.submodels[max_events] = fixed_n_model
 
         for n_events in np.arange(max_events - 1, min_events, -1):
-            fixed_n_model = self.get_fixed_model(n_events)
-            # only take previous model forward when it's actually fitting ok
-            if loglikelihood[-1] != -np.inf:
-                print(f"Estimating all solutions for {n_events} events")
+            fixed_n_model = self.get_fixed_model(n_events, starting_points=n_events+1)
 
-                pars_prev = self.submodels[n_events+1].xrparams.dropna("stage").values
-                mags_prev = self.submodels[n_events+1].xrmags.dropna("event").values
+            print(f"Estimating all solutions for {n_events} events")
 
-                events_temp, pars_temp = [], []
+            pars_prev = self.submodels[n_events+1].xrparams.dropna("stage").values
+            mags_prev = self.submodels[n_events+1].xrmags.dropna("event").values
 
-                for event in np.arange(n_events + 1):  # creating all possible solutions
-                    events_temp.append(mags_prev[:, np.arange(n_events + 1) != event,])
+            events_temp, pars_temp = [], []
 
-                    temp_pars = np.copy(pars_prev)
-                    temp_pars[:, event, 1] = (
-                        temp_pars[:, event, 1] + temp_pars[:, event + 1, 1]
-                    )  # combine two stages into one
-                    temp_pars = np.delete(temp_pars, event + 1, axis=1)
-                    pars_temp.append(temp_pars)
+            for event in np.arange(n_events + 1):  # creating all possible starting points
+                events_temp.append(mags_prev[:, np.arange(n_events + 1) != event,])
 
-                if cpus == 1:
-                    for i in range(len(events_temp)):
-                            fixed_n_model.fit(
-                                trial_data,
-                                magnitudes=events_temp[i],
-                                parameters=pars_temp[i],
-                                verbose=False,
-                            )
-                else:
-                    inputs = zip(
-                        itertools.repeat(trial_data),
-                        events_temp,  # magnitudes
-                        pars_temp,  # parameters
-                        itertools.repeat(None),  # parameters_to_fix
-                        itertools.repeat(None),  # magnitudes_to_fix
-                        itertools.repeat(False),  # verbose
-                        itertools.repeat(1),  # cpus
-                    )
-                    with mp.Pool(processes=cpus) as pool:
-                        pool.starmap(fixed_n_model.fit, inputs)
+                temp_pars = np.copy(pars_prev)
+                temp_pars[:, event, 1] = (
+                    temp_pars[:, event, 1] + temp_pars[:, event + 1, 1]
+                )  # combine two stages into one
+                temp_pars = np.delete(temp_pars, event + 1, axis=1)
+                pars_temp.append(temp_pars)
+            fixed_n_model.fit(
+                            trial_data,
+                            magnitudes=np.array(events_temp),
+                            parameters=np.array(pars_temp),
+                            verbose=False,
+                        )
+                # if cpus == 1:
+                #     for i in range(len(events_temp)):
+                            
+                # else:
+                #     inputs = zip(
+                #         itertools.repeat(trial_data),
+                #         events_temp,  # magnitudes
+                #         pars_temp,  # parameters
+                #         itertools.repeat(None),  # parameters_to_fix
+                #         itertools.repeat(None),  # magnitudes_to_fix
+                #         itertools.repeat(False),  # verbose
+                #         itertools.repeat(1),  # cpus
+                #     )
+                #     with mp.Pool(processes=cpus) as pool:
+                #         pool.starmap(fixed_n_model.fit, inputs)
 
                 # lkhs = [x.loglikelihood.values for x in event_loo_likelihood_temp]
                 # event_loo_results.append(event_loo_likelihood_temp[np.nanargmax(lkhs)])
@@ -136,12 +129,7 @@ class BackwardEstimationModel(BaseModel):
                 # remove event_loo_likelihood
                 # del event_loo_likelihood_temp
                 # Force garbage collection
-                gc.collect()
-
-            else:
-                print(
-                    f"Previous model did not fit well. Estimating a neutral {n_events} event model."
-                )
+            gc.collect()
             self.submodels[n_events] = fixed_n_model
         self._fitted = True
                 # event_loo_results.append(
@@ -198,9 +186,9 @@ class BackwardEstimationModel(BaseModel):
     # def 
 
 
-    def get_fixed_model(self, n_events):
+    def get_fixed_model(self, n_events, starting_points):
         return FixedEventModel(
             self.events, self.distribution, n_events=n_events,
-            starting_points=self.max_starting_points,
+            starting_points=starting_points,
             tolerance=self.tolerance,
             max_iteration=self.max_iteration)

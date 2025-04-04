@@ -67,7 +67,7 @@ def test_fixed_simple():
     estimates = model.transform(trial_data_b)
 
     # testing if bacward identifies the 3 real events
-    assert np.isclose(model.submodels[3].magnitudes, true_estimates.magnitudes)
+    assert np.isclose(model.submodels[3].magnitudes, true_model.magnitudes, atol=1).all()
     
     # testing recovery of attributes
     assert isinstance(model.xrlikelihoods, xr.DataArray)

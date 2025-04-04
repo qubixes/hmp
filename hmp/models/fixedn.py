@@ -34,6 +34,7 @@ class FixedEventModel(BaseModel):
         **kwargs
     ):
         self.n_events = n_events
+        self.n_dims = None
         self.parameters_to_fix = parameters_to_fix
         self.magnitudes_to_fix = magnitudes_to_fix
         self.tolerance = tolerance
@@ -116,6 +117,7 @@ class FixedEventModel(BaseModel):
         infos_to_store["event_width_samples"] = self.event_width_samples
         infos_to_store["tolerance"] = self.tolerance
 
+        self.n_dims = trial_data.n_dims
         if self.n_events is None:
             if parameters is not None:
                 self.n_events = len(parameters) - 1
